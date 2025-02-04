@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		091A70BE2D51B9E5008BA300 /* Appwrite in Frameworks */ = {isa = PBXBuildFile; productRef = 091A70BD2D51B9E5008BA300 /* Appwrite */; };
+		09C818092D51E0D9002C93BD /* MuxPlayerSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 09C818082D51E0D9002C93BD /* MuxPlayerSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +70,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				09C818092D51E0D9002C93BD /* MuxPlayerSwift in Frameworks */,
 				091A70BE2D51B9E5008BA300 /* Appwrite in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -131,6 +133,7 @@
 			name = TikTokClone;
 			packageProductDependencies = (
 				091A70BD2D51B9E5008BA300 /* Appwrite */,
+				09C818082D51E0D9002C93BD /* MuxPlayerSwift */,
 			);
 			productName = TikTokClone;
 			productReference = 0929A03E2D51752A003E2DF7 /* TikTokClone.app */;
@@ -216,6 +219,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				091A70BC2D51B9E5008BA300 /* XCRemoteSwiftPackageReference "sdk-for-apple" */,
+				09C818072D51E0D9002C93BD /* XCRemoteSwiftPackageReference "mux-player-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0929A03F2D51752A003E2DF7 /* Products */;
@@ -594,6 +598,14 @@
 				minimumVersion = 8.0.0;
 			};
 		};
+		09C818072D51E0D9002C93BD /* XCRemoteSwiftPackageReference "mux-player-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/muxinc/mux-player-swift";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -601,6 +613,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 091A70BC2D51B9E5008BA300 /* XCRemoteSwiftPackageReference "sdk-for-apple" */;
 			productName = Appwrite;
+		};
+		09C818082D51E0D9002C93BD /* MuxPlayerSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 09C818072D51E0D9002C93BD /* XCRemoteSwiftPackageReference "mux-player-swift" */;
+			productName = MuxPlayerSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
