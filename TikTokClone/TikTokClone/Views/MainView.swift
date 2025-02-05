@@ -61,7 +61,10 @@ struct MainView: View {
         case .schedule:
             ScheduleView()
         case .activity:
-            PlaceholderView(title: "Activity View", subtitle: "Coming soon")
+            ActivityView(isActive: Binding(
+                get: { selectedTab == .activity },
+                set: { _ in }
+            ))
         case .liveStreams:
             PlaceholderView(title: "Live Streams", subtitle: "Coming soon")
         case .peaceful:
