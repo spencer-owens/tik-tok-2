@@ -25,6 +25,13 @@ class AgoraManager: NSObject, ObservableObject {
     }
     
     func joinChannel(token: String, channelName: String, as role: AgoraClientRole) {
+        // Configure video encoding parameters for 60 FPS
+        let videoConfig = AgoraVideoEncoderConfiguration()
+        videoConfig.frameRate = .fps60
+        videoConfig.dimensions = CGSize(width: 1920, height: 1080) // 1080p
+        videoConfig.bitrate = AgoraVideoBitrateStandard
+        agoraEngine?.setVideoEncoderConfiguration(videoConfig)
+        
         // Enable video module
         agoraEngine?.enableVideo()
         
