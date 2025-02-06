@@ -13,6 +13,73 @@ class ActivityViewModel: ObservableObject {
     private var timeObserver: Any?
     private let appwriteManager = AppwriteManager.shared
     
+    // Cache for audio data
+    private var audioCache: [String: Data] = [:]
+    private var preloadedAudioPlayer: AVPlayer?
+    private var preloadedVideoPlayer: AVPlayer?
+    
+    // Preload the next activity's media
+    func preloadNextActivity() async {
+        let nextActivity = getNextActivity()
+        print("Preloading media for next activity: \(nextActivity)")
+        
+        // Load media for next activity
+        await appwriteManager.loadMediaForActivity(nextActivity)
+        
+        // Preload video
+        if let videoId = appwriteManager.currentVideoId,
+           let videoUrl = appwriteManager.getMuxStreamUrl(for: videoId) {
+            let playerItem = AVPlayerItem(url: videoUrl)
+            preloadedVideoPlayer = AVPlayer(playerItem: playerItem)
+            preloadedVideoPlayer?.isMuted = true
+            // Preload by starting and immediately pausing
+            preloadedVideoPlayer?.play()
+            preloadedVideoPlayer?.pause()
+        }
+        
+        // Preload audio if needed
+        if nextActivity != .meditation {
+            await preloadAudio()
+        }
+    }
+    
+    private func preloadAudio() async {
+        guard let audioUrl = appwriteManager.currentAudioUrl else { return }
+        
+        // Check cache first
+        let urlString = audioUrl.absoluteString
+        if audioCache[urlString] != nil {
+            print("Audio already cached")
+            return
+        }
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(from: audioUrl)
+            audioCache[urlString] = data
+            print("Cached audio data: \(data.count) bytes")
+            
+            // Create and preload audio player
+            let playerItem = AVPlayerItem(url: audioUrl)
+            preloadedAudioPlayer = AVPlayer(playerItem: playerItem)
+            preloadedAudioPlayer?.play()
+            preloadedAudioPlayer?.pause()
+        } catch {
+            print("Failed to preload audio: \(error)")
+        }
+    }
+    
+    private func getNextActivity() -> MediaAsset.ActivityCategory {
+        // Simple implementation - could be more sophisticated
+        switch currentActivityType {
+        case .meditation:
+            return .walking
+        case .walking:
+            return .meal
+        case .meal:
+            return .meditation
+        }
+    }
+    
     func getCurrentActivity() -> MediaAsset.ActivityCategory {
         let calendar = Calendar.current
         let currentDate = ScheduleView.getCurrentTime()  // Use the override-aware time
@@ -68,78 +135,91 @@ class ActivityViewModel: ObservableObject {
         currentActivityType = getCurrentActivity()
         print("Current activity type: \(currentActivityType)")
         
-        // Load new media
-        await appwriteManager.loadMediaForActivity(currentActivityType)
-        
-        // Setup video first
-        if let videoId = appwriteManager.currentVideoId,
-           let videoUrl = appwriteManager.getMuxStreamUrl(for: videoId) {
-            print("Setting up video with ID: \(videoId)")
-            
-            let playerItem = AVPlayerItem(url: videoUrl)
-            videoPlayer = AVPlayer(playerItem: playerItem)
-            
-            // For meditation videos, we want their original audio
-            videoPlayer?.isMuted = (currentActivityType != .meditation)
-            
-            // Add time observer for video looping
-            let interval = CMTime(seconds: 0.5, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-            timeObserver = videoPlayer?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
-                guard let self = self else { return }
-                if let duration = self.videoPlayer?.currentItem?.duration,
-                   let currentTime = self.videoPlayer?.currentTime(),
-                   duration.seconds > 0,
-                   currentTime.seconds >= duration.seconds - 0.5 {
-                    self.videoPlayer?.seek(to: .zero)
-                    self.videoPlayer?.play()
-                }
-            }
-            
-            // Start video playback
+        // Check if we have preloaded media
+        if let preloadedVideo = preloadedVideoPlayer,
+           currentActivityType != .meditation {
+            print("Using preloaded video")
+            videoPlayer = preloadedVideo
+            await videoPlayer?.seek(to: .zero)
             videoPlayer?.play()
+        } else {
+            // Load new media normally
+            await appwriteManager.loadMediaForActivity(currentActivityType)
             
-            // For walking and meal times, add our custom audio
-            if currentActivityType != .meditation {
-                await setupCustomAudio()
+            if let videoId = appwriteManager.currentVideoId,
+               let videoUrl = appwriteManager.getMuxStreamUrl(for: videoId) {
+                print("Setting up new video with ID: \(videoId)")
+                
+                let playerItem = AVPlayerItem(url: videoUrl)
+                videoPlayer = AVPlayer(playerItem: playerItem)
+                videoPlayer?.isMuted = (currentActivityType != .meditation)
+                videoPlayer?.play()
             }
+        }
+        
+        // Setup video looping
+        setupVideoLooping()
+        
+        // For walking and meal times, add our custom audio
+        if currentActivityType != .meditation {
+            await setupCustomAudio()
         }
         
         isLoading = false
         statusMessage = "Playing \(currentActivityType)"
+        
+        // Preload next activity's media
+        await preloadNextActivity()
+    }
+    
+    private func setupVideoLooping() {
+        let interval = CMTime(seconds: 0.5, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        timeObserver = videoPlayer?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
+            guard let self = self else { return }
+            if let duration = self.videoPlayer?.currentItem?.duration,
+               let currentTime = self.videoPlayer?.currentTime(),
+               duration.seconds > 0,
+               currentTime.seconds >= duration.seconds - 0.5 {
+                Task { @MainActor in
+                    await self.videoPlayer?.seek(to: .zero)
+                    self.videoPlayer?.play()
+                }
+            }
+        }
     }
     
     private func setupCustomAudio() async {
+        // Check if we have preloaded audio
+        if let preloadedAudio = preloadedAudioPlayer {
+            print("Using preloaded audio")
+            audioPlayer = preloadedAudio
+            await audioPlayer?.seek(to: .zero)
+            audioPlayer?.play()
+            return
+        }
+        
         guard let audioUrl = appwriteManager.currentAudioUrl else {
             print("No audio URL available")
             return
         }
         
-        print("Attempting to play audio from: \(audioUrl)")
+        print("Setting up new audio from: \(audioUrl)")
         
         do {
-            // Create a URL request to include any necessary headers
-            var request = URLRequest(url: audioUrl)
-            // Add any session cookies that might be present
-            if let cookies = HTTPCookieStorage.shared.cookies {
-                let headers = HTTPCookie.requestHeaderFields(with: cookies)
-                for (header, value) in headers {
-                    request.addValue(value, forHTTPHeaderField: header)
-                }
-            }
+            let urlString = audioUrl.absoluteString
+            let audioData: Data
             
-            // Try to access the audio using the request
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw NSError(domain: "AudioError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+            // Try to get from cache first
+            if let cachedData = audioCache[urlString] {
+                print("Using cached audio data")
+                audioData = cachedData
+            } else {
+                // Download and cache if not available
+                let (data, _) = try await URLSession.shared.data(from: audioUrl)
+                audioData = data
+                audioCache[urlString] = data
+                print("Downloaded and cached new audio data")
             }
-            
-            if httpResponse.statusCode == 401 {
-                print("Authentication required for audio")
-                statusMessage = "Authentication required for audio"
-                return
-            }
-            
-            print("Successfully loaded audio data: \(data.count) bytes")
             
             let audioItem = AVPlayerItem(url: audioUrl)
             audioPlayer = AVPlayer(playerItem: audioItem)
@@ -150,11 +230,12 @@ class ActivityViewModel: ObservableObject {
                 object: audioItem,
                 queue: .main
             ) { [weak self] _ in
-                self?.audioPlayer?.seek(to: .zero)
-                self?.audioPlayer?.play()
+                Task { @MainActor in
+                    await self?.audioPlayer?.seek(to: .zero)
+                    self?.audioPlayer?.play()
+                }
             }
             
-            // Start audio playback
             audioPlayer?.play()
             print("Started audio playback")
             
@@ -164,7 +245,6 @@ class ActivityViewModel: ObservableObject {
         }
     }
     
-    // Changed to internal access and kept async for actor isolation
     func stopPlayback() async {
         if let timeObserver = timeObserver {
             videoPlayer?.removeTimeObserver(timeObserver)
@@ -174,6 +254,12 @@ class ActivityViewModel: ObservableObject {
         videoPlayer = nil
         audioPlayer?.pause()
         audioPlayer = nil
+        
+        // Clear preloaded players
+        preloadedVideoPlayer?.pause()
+        preloadedVideoPlayer = nil
+        preloadedAudioPlayer?.pause()
+        preloadedAudioPlayer = nil
     }
     
     deinit {
@@ -258,6 +344,36 @@ final class ObservableObjectWrapper: ObservableObject {
     init(statusMessage: String) { self.statusMessage = statusMessage }
 }
 
+// Add LoadingView before ActivityView
+struct LoadingView: View {
+    let activity: String
+    @State private var dotCount = 0
+    
+    let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Now entering")
+                .font(.title3)
+                .foregroundColor(.white.opacity(0.8))
+            
+            Text(activity)
+                .font(.title.bold())
+                .foregroundColor(.white)
+            
+            Text(String(repeating: ".", count: dotCount + 1))
+                .font(.title2)
+                .foregroundColor(.white.opacity(0.8))
+                .onReceive(timer) { _ in
+                    dotCount = (dotCount + 1) % 3
+                }
+        }
+        .padding(24)
+        .background(Color.black.opacity(0.7))
+        .cornerRadius(16)
+    }
+}
+
 struct ActivityView: View {
     @Binding var isActive: Bool
     @StateObject private var viewModel = ActivityViewModel()
@@ -283,15 +399,17 @@ struct ActivityView: View {
                     .padding()
             }
             
-            // Loading overlay
+            // Loading overlay with activity name
             if viewModel.isLoading {
-                Color.black.opacity(0.5)
+                Color.black.opacity(0.7)
                     .edgesIgnoringSafeArea(.all)
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    .scaleEffect(1.5)
+                    .transition(.opacity)
+                
+                LoadingView(activity: viewModel.currentActivityType.displayName)
+                    .transition(.scale.combined(with: .opacity))
             }
         }
+        .animation(.easeInOut, value: viewModel.isLoading)
         .task {
             if isActive {
                 await viewModel.loadAndPlayMedia()
@@ -307,6 +425,20 @@ struct ActivityView: View {
                     await viewModel.stopPlayback()
                 }
             }
+        }
+    }
+}
+
+// Add extension for activity display names
+extension MediaAsset.ActivityCategory {
+    var displayName: String {
+        switch self {
+        case .meditation:
+            return "Guided Meditation"
+        case .walking:
+            return "Walking Meditation"
+        case .meal:
+            return "Mindful Meal"
         }
     }
 }
