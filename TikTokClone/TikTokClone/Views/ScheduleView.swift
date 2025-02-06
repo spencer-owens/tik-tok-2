@@ -18,6 +18,17 @@ struct ScheduleView: View {
     @State private var currentTime = Date()
     let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     
+    // Add time override for testing
+    @State private var timeOverride: Date?
+    @State private var showingTimePicker = false
+    
+    // Add static properties for time override
+    static var timeOverride: Date?
+    
+    static func getCurrentTime() -> Date {
+        return timeOverride ?? Date()
+    }
+    
     let schedule: [ScheduleItem] = {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -65,6 +76,35 @@ struct ScheduleView: View {
                 .font(.title)
                 .padding()
             
+            // Add time override controls
+            HStack {
+                if let override = timeOverride {
+                    Text("TEST MODE: \(timeFormatter.string(from: override))")
+                        .foregroundColor(.orange)
+                } else {
+                    Text("Current time: \(timeFormatter.string(from: currentTime))")
+                }
+                
+                Spacer()
+                
+                Button(action: {
+                    showingTimePicker = true
+                }) {
+                    Image(systemName: timeOverride == nil ? "clock" : "clock.badge.exclamationmark")
+                        .foregroundColor(timeOverride == nil ? .blue : .orange)
+                }
+                
+                if timeOverride != nil {
+                    Button(action: {
+                        timeOverride = nil
+                    }) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            .padding(.horizontal)
+            
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
@@ -83,14 +123,26 @@ struct ScheduleView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingTimePicker) {
+            TimePickerView(selectedDate: Binding(
+                get: { timeOverride ?? currentTime },
+                set: { 
+                    timeOverride = $0
+                    ScheduleView.timeOverride = $0  // Update static override
+                }
+            ))
+        }
         .onReceive(timer) { _ in
-            currentTime = Date()
+            if timeOverride == nil {
+                currentTime = Date()
+                ScheduleView.timeOverride = nil  // Update static override
+            }
         }
     }
     
     private func isCurrentActivity(_ item: ScheduleItem) -> Bool {
         let calendar = Calendar.current
-        let currentDate = Date()
+        let currentDate = timeOverride ?? Date()
         
         let itemIndex = schedule.firstIndex(where: { $0.id == item.id }) ?? 0
         let nextItemIndex = itemIndex + 1
@@ -153,6 +205,41 @@ struct ScheduleItemView: View {
         return formatter.string(from: item.time)
     }
 }
+
+// Add TimePickerView
+struct TimePickerView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selectedDate: Date
+    
+    var body: some View {
+        NavigationView {
+            DatePicker(
+                "Select Time",
+                selection: $selectedDate,
+                displayedComponents: [.hourAndMinute]
+            )
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            .navigationTitle("Test Time")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.height(250)])
+    }
+}
+
+// Add time formatter
+private let timeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm"
+    return formatter
+}()
 
 #Preview {
     ScheduleView()
