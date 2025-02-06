@@ -1,4 +1,6 @@
 import SwiftUI
+import AgoraRtcKit
+
 
 enum MainTab: Int, CaseIterable {
     case schedule = 0
@@ -66,7 +68,7 @@ struct MainView: View {
                 set: { _ in }
             ))
         case .liveStreams:
-            PlaceholderView(title: "Live Streams", subtitle: "Coming soon")
+            LivestreamView()
         case .peaceful:
             PlaceholderView(title: "Peaceful View", subtitle: "Coming soon")
         }
