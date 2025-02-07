@@ -10,6 +10,7 @@ struct FloatingEmoji: Identifiable {
 
 struct PeacefulView: View {
     @StateObject private var appwriteManager = AppwriteManager.shared
+    @EnvironmentObject private var healthKitManager: HealthKitManager
     @State private var floatingEmojis: [FloatingEmoji] = []
     
     private let availableEmojis = ["❤️", "😊", "✨", "🙏", "🌟", "🕊️"]
@@ -21,6 +22,17 @@ struct PeacefulView: View {
                 // YouTube Player
                 YouTubePlayerView(videoID: youtubeVideoId)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
+                // Heart Rate Display in top-right corner
+                VStack {
+                    HStack {
+                        Spacer()
+                        HeartRateView()
+                            .padding(.top, 50)
+                            .padding(.trailing)
+                    }
+                    Spacer()
+                }
                 
                 // Floating Emojis
                 ForEach(floatingEmojis) { emoji in

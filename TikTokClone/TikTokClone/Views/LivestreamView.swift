@@ -24,6 +24,7 @@ struct AgoraVideoView: UIViewRepresentable {
 struct LivestreamView: View {
     @StateObject private var agoraManager = AgoraManager.shared
     @Environment(\.presentationMode) var presentationMode
+    @EnvironmentObject private var healthKitManager: HealthKitManager
     
     private let token = "007eJxTYBBotZYTPD6RfYbvmpmX+N0ksmUkq2Xvb5sV31Oz0XOW0DkFBkMDAwNTiyQjg9Q0YxNDA0tL80RzE0MTS4s0Q6NUMzOLkuql6Q2BjAxb/i1hYWSAQBCfh6EktbhENzkjMS8vNYeBAQA5OR+7"
     private let channelName = "test-channel"
@@ -87,6 +88,17 @@ struct LivestreamView: View {
                     }
                 }
                 .padding(.bottom, 30)
+            }
+            
+            // Heart Rate Display in top-right corner
+            VStack {
+                HStack {
+                    Spacer()
+                    HeartRateView()
+                        .padding(.top, 50)
+                        .padding(.trailing)
+                }
+                Spacer()
             }
             
             // Error alert

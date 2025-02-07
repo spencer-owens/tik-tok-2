@@ -24,6 +24,10 @@
     <string>We need access to your camera for livestreaming</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>We need access to your microphone for livestreaming audio</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>We use your heart rate data to enhance your meditation experience</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>We use your heart rate data to enhance your meditation experience</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>

@@ -377,6 +377,7 @@ struct LoadingView: View {
 struct ActivityView: View {
     @Binding var isActive: Bool
     @StateObject private var viewModel = ActivityViewModel()
+    @EnvironmentObject private var healthKitManager: HealthKitManager
     
     var body: some View {
         ZStack {
@@ -385,6 +386,17 @@ struct ActivityView: View {
                     .edgesIgnoringSafeArea(.all)
             } else {
                 Color.black.edgesIgnoringSafeArea(.all)
+            }
+            
+            // Heart Rate Display in top-right corner
+            VStack {
+                HStack {
+                    Spacer()
+                    HeartRateView()
+                        .padding(.top, 50)
+                        .padding(.trailing)
+                }
+                Spacer()
             }
             
             // Status overlay
