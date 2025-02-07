@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		091A70BE2D51B9E5008BA300 /* Appwrite in Frameworks */ = {isa = PBXBuildFile; productRef = 091A70BD2D51B9E5008BA300 /* Appwrite */; };
 		093DF5F32D542F410002F075 /* RtcBasic in Frameworks */ = {isa = PBXBuildFile; productRef = 093DF5F22D542F410002F075 /* RtcBasic */; };
+		09ADC2DC2D55B743002970F8 /* YouTubeiOSPlayerHelper in Frameworks */ = {isa = PBXBuildFile; productRef = 09ADC2DB2D55B743002970F8 /* YouTubeiOSPlayerHelper */; };
 		09C818092D51E0D9002C93BD /* MuxPlayerSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 09C818082D51E0D9002C93BD /* MuxPlayerSwift */; };
 /* End PBXBuildFile section */
 
@@ -74,6 +75,7 @@
 				09C818092D51E0D9002C93BD /* MuxPlayerSwift in Frameworks */,
 				091A70BE2D51B9E5008BA300 /* Appwrite in Frameworks */,
 				093DF5F32D542F410002F075 /* RtcBasic in Frameworks */,
+				09ADC2DC2D55B743002970F8 /* YouTubeiOSPlayerHelper in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -137,6 +139,7 @@
 				091A70BD2D51B9E5008BA300 /* Appwrite */,
 				09C818082D51E0D9002C93BD /* MuxPlayerSwift */,
 				093DF5F22D542F410002F075 /* RtcBasic */,
+				09ADC2DB2D55B743002970F8 /* YouTubeiOSPlayerHelper */,
 			);
 			productName = TikTokClone;
 			productReference = 0929A03E2D51752A003E2DF7 /* TikTokClone.app */;
@@ -224,6 +227,7 @@
 				091A70BC2D51B9E5008BA300 /* XCRemoteSwiftPackageReference "sdk-for-apple" */,
 				09C818072D51E0D9002C93BD /* XCRemoteSwiftPackageReference "mux-player-swift" */,
 				093DF5F12D542F410002F075 /* XCRemoteSwiftPackageReference "AgoraRtcEngine_iOS" */,
+				09ADC2DA2D55B743002970F8 /* XCRemoteSwiftPackageReference "youtube-ios-player-helper" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0929A03F2D51752A003E2DF7 /* Products */;
@@ -610,6 +614,14 @@
 				minimumVersion = 4.5.0;
 			};
 		};
+		09ADC2DA2D55B743002970F8 /* XCRemoteSwiftPackageReference "youtube-ios-player-helper" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/youtube/youtube-ios-player-helper";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.4;
+			};
+		};
 		09C818072D51E0D9002C93BD /* XCRemoteSwiftPackageReference "mux-player-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/muxinc/mux-player-swift";
@@ -630,6 +642,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 093DF5F12D542F410002F075 /* XCRemoteSwiftPackageReference "AgoraRtcEngine_iOS" */;
 			productName = RtcBasic;
+		};
+		09ADC2DB2D55B743002970F8 /* YouTubeiOSPlayerHelper */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 09ADC2DA2D55B743002970F8 /* XCRemoteSwiftPackageReference "youtube-ios-player-helper" */;
+			productName = YouTubeiOSPlayerHelper;
 		};
 		09C818082D51E0D9002C93BD /* MuxPlayerSwift */ = {
 			isa = XCSwiftPackageProductDependency;

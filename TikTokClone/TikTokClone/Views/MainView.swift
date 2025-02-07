@@ -70,7 +70,7 @@ struct MainView: View {
         case .liveStreams:
             LivestreamView()
         case .peaceful:
-            PlaceholderView(title: "Peaceful View", subtitle: "Coming soon")
+            PeacefulView()
         }
     }
 }

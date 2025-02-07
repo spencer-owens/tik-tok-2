@@ -1,6 +1,16 @@
 import Foundation
 import Appwrite
+import AppwriteModels
 import JSONCodable
+
+// Helper extension for Date ISO8601 formatting
+extension Date {
+    var iso8601String: String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: self)
+    }
+}
 
 struct MediaAsset: Codable {
     let id: String
@@ -19,6 +29,12 @@ struct MediaAsset: Codable {
         case meditation
         case meal
     }
+}
+
+// Add ReactionDocument type
+struct ReactionDocument: Codable {
+    let emoji: String
+    let createdAt: String
 }
 
 class Appwrite {
@@ -45,10 +61,20 @@ class Appwrite {
         ]
     }
     
+    // MARK: - Database Constants
+    struct Database {
+        static let id = "67a580230029e01e56af"
+        
+        struct Collections {
+            static let reactions = "67a5806500128aef9d88"
+        }
+    }
+    
     var client: Client
     var account: Account
     var databases: Databases
     var storage: Storage
+    var realtime: Realtime
     
     let bucketId = "67a5108e001f86591b24"
     
@@ -60,6 +86,7 @@ class Appwrite {
         self.account = Account(client)
         self.databases = Databases(client)
         self.storage = Storage(client)
+        self.realtime = Realtime(client)
     }
     
     public func checkSession() async -> Bool {
@@ -132,34 +159,20 @@ class Appwrite {
     
     public func getFileView(fileId: String) async throws -> URL {
         do {
-            // First verify we have an active session
             guard await checkSession() else {
                 throw NSError(domain: "AppwriteError", code: -1, userInfo: [NSLocalizedDescriptionKey: "No active session"])
             }
             
-            // Get the file to verify access and existence
-            let file = try await storage.getFile(
-                bucketId: bucketId,
-                fileId: fileId
-            )
-            print("Found audio file: \(file.name), mimeType: \(file.mimeType)")
+            _ = try await storage.getFile(bucketId: bucketId, fileId: fileId)
             
-            // Get a download URL with proper authentication
-            let result = try await storage.getFileDownload(
-                bucketId: bucketId,
-                fileId: fileId
-            )
-            
-            // Convert ByteBuffer to URL with proper authentication
             let urlString = "\(client.endPoint)/storage/buckets/\(bucketId)/files/\(fileId)/download?project=67a13c9400166a970385"
             guard let url = URL(string: urlString) else {
                 throw NSError(domain: "AppwriteError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
             }
             
-            print("Generated audio URL: \(url)")
             return url
         } catch {
-            print("Failed to get audio file: \(error)")
+            print("Failed to get file view: \(error)")
             throw error
         }
     }
@@ -191,6 +204,57 @@ class Appwrite {
             return MediaIDs.muxVideos["cooking"]!.randomElement()!
         case .meditation:
             return MediaIDs.muxVideos["meditation"]!.first!
+        }
+    }
+    
+    // MARK: - Reactions Methods
+    public func createReaction(emoji: String) async throws -> Document<[String: AnyCodable]> {
+        let data: [String: String] = [
+            "emoji": emoji,
+            "createdAt": Date().iso8601String
+        ]
+        return try await databases.createDocument(
+            databaseId: Database.id,
+            collectionId: Database.Collections.reactions,
+            documentId: ID.unique(),
+            data: data as [String : Any]
+        )
+    }
+    
+    public func subscribeToReactions() async throws -> RealtimeSubscription {
+        print("🔄 Setting up realtime subscription for reactions")
+        let channel = "databases.\(Database.id).collections.\(Database.Collections.reactions).documents"
+        print("📡 Channel: \(channel)")
+        
+        return try await realtime.subscribe(channels: [channel]) { response in
+            print("📥 Received realtime event")
+            print("Events: \(String(describing: response.events))")
+            
+            guard let events = response.events,
+                  let payload = response.payload else {
+                print("⚠️ No events or payload in response")
+                return
+            }
+            
+            // Only process create events to prevent duplicates
+            let isCreateEvent = events.contains("databases.\(Database.id).collections.\(Database.Collections.reactions).documents.*.create")
+            
+            guard isCreateEvent else {
+                print("⚠️ Skipping non-create event")
+                return
+            }
+            
+            print("📦 Valid create event received, broadcasting...")
+            print("📦 Payload: \(payload)")
+            
+            // Post notification with payload on main thread
+            Task { @MainActor in
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("RealtimeEvent"),
+                    object: nil,
+                    userInfo: ["payload": payload]
+                )
+            }
         }
     }
 }

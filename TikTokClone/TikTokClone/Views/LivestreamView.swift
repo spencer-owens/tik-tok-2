@@ -25,7 +25,7 @@ struct LivestreamView: View {
     @StateObject private var agoraManager = AgoraManager.shared
     @Environment(\.presentationMode) var presentationMode
     
-    private let token = "007eJxTYFA+NneTdtR6ds6lr4VnSFneeLNi40Wu8J1Tor79ff30bttBBQZDAwMDU4skI4PUNGMTQwNLS/NEcxNDE0uLNEOjVDMzC5nXi9MbAhkZEgIfMTMyQCCIz8NQklpcopuckZiXl5rDwAAAyzMj6w=="
+    private let token = "007eJxTYBBotZYTPD6RfYbvmpmX+N0ksmUkq2Xvb5sV31Oz0XOW0DkFBkMDAwNTiyQjg9Q0YxNDA0tL80RzE0MTS4s0Q6NUMzOLkuql6Q2BjAxb/i1hYWSAQBCfh6EktbhENzkjMS8vNYeBAQA5OR+7"
     private let channelName = "test-channel"
     
     var body: some View {
