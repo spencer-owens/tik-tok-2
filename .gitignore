@@ -161,3 +161,15 @@ cython_debug/
 
 # Directory used by Appwrite CLI for local development
 .appwrite
+
+# Xcode
+#
+## User settings
+xcuserdata/
+*.xcuserstate
+
+## Xcode Patch
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcworkspace/contents.xcworkspacedata
