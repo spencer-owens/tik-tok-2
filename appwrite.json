@@ -94,5 +94,27 @@
             "encryption": true,
             "antivirus": true
         }
+    ],
+    "functions": [
+        {
+            "$id": "67a7d685002d82e2a32a",
+            "execute": [
+                "any"
+            ],
+            "name": "Starter function",
+            "enabled": true,
+            "logging": true,
+            "runtime": "python-3.12",
+            "scopes": [
+                "users.read"
+            ],
+            "events": [],
+            "schedule": "",
+            "timeout": 15,
+            "entrypoint": "src/main.py",
+            "commands": "pip install -r requirements.txt",
+            "specification": "s-0.5vcpu-512mb",
+            "path": "functions/Starter function"
+        }
     ]
 }
