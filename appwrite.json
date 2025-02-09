@@ -99,21 +99,44 @@
         {
             "$id": "67a7d685002d82e2a32a",
             "execute": [
-                "any"
+                "sessions.write",
+                "users.read",
+                "users.write",
+                "teams.read",
+                "teams.write",
+                "databases.read",
+                "databases.write",
+                "collections.read",
+                "collections.write",
+                "attributes.read",
+                "attributes.write",
+                "indexes.read",
+                "indexes.write",
+                "documents.read",
+                "documents.write",
+                "files.read",
+                "files.write",
+                "buckets.read",
+                "buckets.write",
+                "functions.read",
+                "functions.write",
+                "execution.read",
+                "execution.write",
+                "locale.read",
+                "avatars.read",
+                "health.read"
             ],
             "name": "Starter function",
             "enabled": true,
             "logging": true,
             "runtime": "python-3.12",
-            "scopes": [
-                "users.read"
-            ],
+            "scopes": [],
             "events": [],
             "schedule": "",
             "timeout": 15,
             "entrypoint": "src/main.py",
             "commands": "pip install -r requirements.txt",
-            "specification": "s-0.5vcpu-512mb",
+            "specification": "s-1vcpu-512mb",
             "path": "functions/starter-function"
         }
     ]
