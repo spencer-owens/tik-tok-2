@@ -98,7 +98,12 @@
     "functions": [
         {
             "$id": "67a7d685002d82e2a32a",
-            "execute": [
+            "execute": ["any"],
+            "name": "Starter function",
+            "enabled": true,
+            "logging": true,
+            "runtime": "python-3.12",
+            "scopes": [
                 "sessions.write",
                 "users.read",
                 "users.write",
@@ -126,11 +131,6 @@
                 "avatars.read",
                 "health.read"
             ],
-            "name": "Starter function",
-            "enabled": true,
-            "logging": true,
-            "runtime": "python-3.12",
-            "scopes": [],
             "events": [],
             "schedule": "",
             "timeout": 15,
