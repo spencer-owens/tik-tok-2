@@ -1,7 +1,6 @@
 import SwiftUI
 import AgoraRtcKit
 
-
 enum MainTab: Int, CaseIterable {
     case schedule = 0
     case activity
@@ -16,61 +15,64 @@ enum MainTab: Int, CaseIterable {
         case .peaceful: return "Peaceful"
         }
     }
+    
+    var icon: String {
+        switch self {
+        case .schedule: return "calendar"
+        case .activity: return "figure.walk"
+        case .liveStreams: return "video.fill"
+        case .peaceful: return "leaf.fill"
+        }
+    }
 }
 
 struct MainView: View {
     @State private var selectedTab: MainTab = .schedule
-    @GestureState private var dragOffset: CGFloat = 0
     
     var body: some View {
-        GeometryReader { geometry in
-            HStack(spacing: 0) {
-                ForEach(MainTab.allCases, id: \.rawValue) { tab in
-                    tabView(for: tab)
-                        .frame(width: geometry.size.width)
-                }
-            }
-            .offset(x: -CGFloat(selectedTab.rawValue) * geometry.size.width)
-            .offset(x: dragOffset)
-            .gesture(
-                DragGesture()
-                    .updating($dragOffset) { value, state, _ in
-                        state = value.translation.width
-                    }
-                    .onEnded { value in
-                        let threshold = geometry.size.width * 0.25
-                        var newIndex = CGFloat(selectedTab.rawValue) - value.translation.width / geometry.size.width
-                        
-                        if abs(value.translation.width) > threshold {
-                            newIndex = newIndex.rounded()
-                        } else {
-                            newIndex = CGFloat(selectedTab.rawValue)
-                        }
-                        
-                        newIndex = min(CGFloat(MainTab.allCases.count - 1), max(0, newIndex))
-                        withAnimation {
-                            selectedTab = MainTab(rawValue: Int(newIndex)) ?? .schedule
-                        }
-                    }
-            )
-            .animation(.interactiveSpring(), value: dragOffset)
-        }
-    }
-    
-    @ViewBuilder
-    private func tabView(for tab: MainTab) -> some View {
-        switch tab {
-        case .schedule:
+        TabView(selection: $selectedTab) {
             ScheduleView()
-        case .activity:
+                .tag(MainTab.schedule)
+                .tabItem {
+                    Label(MainTab.schedule.title, systemImage: MainTab.schedule.icon)
+                }
+            
             ActivityView(isActive: Binding(
                 get: { selectedTab == .activity },
                 set: { _ in }
             ))
-        case .liveStreams:
+                .tag(MainTab.activity)
+                .tabItem {
+                    Label(MainTab.activity.title, systemImage: MainTab.activity.icon)
+                }
+            
             LivestreamView()
-        case .peaceful:
+                .tag(MainTab.liveStreams)
+                .tabItem {
+                    Label(MainTab.liveStreams.title, systemImage: MainTab.liveStreams.icon)
+                }
+            
             PeacefulView()
+                .tag(MainTab.peaceful)
+                .tabItem {
+                    Label(MainTab.peaceful.title, systemImage: MainTab.peaceful.icon)
+                }
+        }
+        .tint(.white)
+        .onAppear {
+            // Style the tab bar to be dark
+            let appearance = UITabBarAppearance()
+            appearance.configureWithOpaqueBackground()
+            appearance.backgroundColor = .black
+            
+            // Style the selected and unselected items
+            appearance.stackedLayoutAppearance.selected.iconColor = .white
+            appearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor.white]
+            appearance.stackedLayoutAppearance.normal.iconColor = .gray
+            appearance.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.gray]
+            
+            UITabBar.appearance().standardAppearance = appearance
+            UITabBar.appearance().scrollEdgeAppearance = appearance
         }
     }
 }

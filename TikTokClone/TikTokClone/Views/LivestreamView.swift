@@ -23,71 +23,132 @@ struct AgoraVideoView: UIViewRepresentable {
 
 struct LivestreamView: View {
     @StateObject private var agoraManager = AgoraManager.shared
-    @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject private var healthKitManager: HealthKitManager
+    @State private var isBroadcasting = false
     
-    private let token = "007eJxTYBBotZYTPD6RfYbvmpmX+N0ksmUkq2Xvb5sV31Oz0XOW0DkFBkMDAwNTiyQjg9Q0YxNDA0tL80RzE0MTS4s0Q6NUMzOLkuql6Q2BjAxb/i1hYWSAQBCfh6EktbhENzkjMS8vNYeBAQA5OR+7"
+    private let token = "007eJxTYAhb46MeItyfWZoXP9u9rZpVMuSMxr2Z63b7HD+yPFGpp1yBwdDAwMDUIsnIIDXN2MTQwNLSPNHcxNDE0iLN0CjVzMzitNqq9IZARgahU1HMjAwQCOLzMJSkFpfoJmck5uWl5jAwAACGnh/b"
     private let channelName = "test-channel"
     
     var body: some View {
         ZStack {
             // Main content
-            VStack {
-                // Local video view (when broadcasting)
-                if agoraManager.isInStream {
-                    AgoraVideoView(uid: 0)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .cornerRadius(10)
-                        .padding()
-                }
-                
-                // Remote video grid
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 10) {
-                    ForEach(agoraManager.remoteUsers, id: \.self) { uid in
-                        AgoraVideoView(uid: uid)
-                            .frame(height: 200)
-                            .cornerRadius(10)
-                    }
-                }
-                .padding()
-                
-                // Controls
-                HStack(spacing: 20) {
-                    Button(action: {
-                        if agoraManager.isInStream {
-                            agoraManager.leaveChannel()
-                        } else {
-                            agoraManager.joinChannel(
-                                token: token,
-                                channelName: channelName,
-                                as: .broadcaster
-                            )
+            ScrollView {
+                VStack(spacing: 20) {
+                    // My Livestream Section
+                    VStack(alignment: .leading) {
+                        Text("My Stream")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.horizontal)
+                        
+                        ZStack {
+                            if isBroadcasting {
+                                // Active stream view
+                                AgoraVideoView(uid: 0)
+                                    .frame(height: 300)
+                                    .cornerRadius(10)
+                            } else {
+                                // Placeholder for inactive stream
+                                Rectangle()
+                                    .fill(Color.black.opacity(0.6))
+                                    .frame(height: 300)
+                                    .cornerRadius(10)
+                                    .overlay(
+                                        VStack {
+                                            Image(systemName: "video.fill")
+                                                .font(.largeTitle)
+                                                .foregroundColor(.white.opacity(0.7))
+                                            Text("Start Streaming")
+                                                .foregroundColor(.white.opacity(0.7))
+                                        }
+                                    )
+                            }
+                            
+                            // Stream control button
+                            VStack {
+                                Spacer()
+                                HStack {
+                                    Spacer()
+                                    Button(action: {
+                                        isBroadcasting.toggle()
+                                        if isBroadcasting {
+                                            print("🎬 Starting broadcast")
+                                            agoraManager.setClientRole(.broadcaster)
+                                            // Send initial BPM after a short delay to ensure stream is ready
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                                print("🏃‍♂️ Sending initial BPM: \(healthKitManager.currentBPM)")
+                                                agoraManager.sendBPMUpdate(healthKitManager.currentBPM)
+                                            }
+                                        } else {
+                                            print("⏹️ Stopping broadcast")
+                                            agoraManager.setClientRole(.audience)
+                                        }
+                                    }) {
+                                        Image(systemName: isBroadcasting ? "video.slash.fill" : "video.fill")
+                                            .font(.title2)
+                                            .foregroundColor(isBroadcasting ? .red : .green)
+                                            .padding()
+                                            .background(Color.white.opacity(0.2))
+                                            .clipShape(Circle())
+                                    }
+                                    .padding()
+                                }
+                            }
                         }
-                    }) {
-                        Image(systemName: agoraManager.isInStream ? "video.slash.fill" : "video.fill")
-                            .font(.title)
-                            .foregroundColor(agoraManager.isInStream ? .red : .green)
-                            .padding()
-                            .background(Color.white.opacity(0.2))
-                            .clipShape(Circle())
                     }
+                    .padding(.top)
                     
-                    Button(action: {
-                        agoraManager.leaveChannel()
-                        presentationMode.wrappedValue.dismiss()
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.title)
-                            .foregroundColor(.red)
-                            .padding()
-                            .background(Color.white.opacity(0.2))
-                            .clipShape(Circle())
+                    // Other Streams Section
+                    VStack(alignment: .leading) {
+                        Text("Live Now")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.horizontal)
+                        
+                        VStack {
+                            if agoraManager.remoteUsers.isEmpty {
+                                Text("No active streams")
+                                    .foregroundColor(.gray)
+                                    .frame(maxWidth: .infinity, minHeight: 200)
+                            } else {
+                                LazyVGrid(columns: [
+                                    GridItem(.flexible()),
+                                    GridItem(.flexible())
+                                ], spacing: 10) {
+                                    ForEach(agoraManager.remoteUsers, id: \.self) { uid in
+                                        ZStack {
+                                            AgoraVideoView(uid: uid)
+                                                .frame(height: 200)
+                                                .cornerRadius(10)
+                                            
+                                            // Display remote user's BPM if available
+                                            if let bpm = agoraManager.remoteUsersBPM[uid] {
+                                                VStack {
+                                                    HStack {
+                                                        Spacer()
+                                                        HStack(spacing: 4) {
+                                                            Image(systemName: "heart.fill")
+                                                                .foregroundColor(.red)
+                                                            Text("\(bpm)")
+                                                                .foregroundColor(.white)
+                                                        }
+                                                        .font(.system(size: 14, weight: .semibold))
+                                                        .padding(6)
+                                                        .background(Color.black.opacity(0.6))
+                                                        .cornerRadius(8)
+                                                        .padding(8)
+                                                    }
+                                                    Spacer()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
                     }
                 }
-                .padding(.bottom, 30)
             }
             
             // Heart Rate Display in top-right corner
@@ -95,9 +156,10 @@ struct LivestreamView: View {
                 HStack {
                     Spacer()
                     HeartRateView()
-                        .padding(.top, 50)
-                        .padding(.trailing)
                 }
+                .padding(.top, 50)
+                .padding(.horizontal)
+                
                 Spacer()
             }
             
@@ -112,9 +174,29 @@ struct LivestreamView: View {
             }
         }
         .background(Color.black.edgesIgnoringSafeArea(.all))
-        .contentShape(Rectangle())
+        .onAppear {
+            print("📱 LivestreamView appeared")
+            // Ensure we're connected as audience
+            agoraManager.ensureConnection(
+                token: token,
+                channelName: channelName,
+                as: .audience
+            )
+        }
         .onDisappear {
-            agoraManager.leaveChannel()
+            print("👋 LivestreamView disappeared")
+            if isBroadcasting {
+                print("⏹️ Stopping broadcast on disappear")
+                isBroadcasting = false
+                agoraManager.setClientRole(.audience)
+            }
+        }
+        .onChange(of: healthKitManager.currentBPM) { newValue in
+            // Send BPM updates when broadcasting
+            if isBroadcasting {
+                print("❤️ Broadcasting BPM update: \(newValue)")
+                agoraManager.sendBPMUpdate(newValue)
+            }
         }
     }
 } 

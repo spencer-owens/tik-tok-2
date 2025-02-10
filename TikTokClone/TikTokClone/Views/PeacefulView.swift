@@ -12,6 +12,7 @@ struct PeacefulView: View {
     @StateObject private var appwriteManager = AppwriteManager.shared
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @State private var floatingEmojis: [FloatingEmoji] = []
+    @State private var isVideoReady = false
     
     private let availableEmojis = ["❤️", "😊", "✨", "🙏", "🌟", "🕊️"]
     private let youtubeVideoId = "wKg71lcs5Nw"
@@ -19,9 +20,13 @@ struct PeacefulView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // YouTube Player
-                YouTubePlayerView(videoID: youtubeVideoId)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Background color while video loads
+                Color.black.edgesIgnoringSafeArea(.all)
+                
+                // YouTube Player with clean interface
+                YouTubePlayerView(videoID: youtubeVideoId, isReady: $isVideoReady)
+                    .opacity(isVideoReady ? 1 : 0)
+                    .animation(.easeIn(duration: 0.3), value: isVideoReady)
                 
                 // Heart Rate Display in top-right corner
                 VStack {
@@ -75,8 +80,7 @@ struct PeacefulView: View {
                 await appwriteManager.stopListeningToReactions()
             }
         }
-        .onChange(of: appwriteManager.recentReactions) { reactions in
-            // Add new reactions as floating emojis
+        .onChange(of: appwriteManager.recentReactions) { oldValue, reactions in
             if let latestReaction = reactions.last {
                 addFloatingEmoji(latestReaction.emoji, width: UIScreen.main.bounds.width)
             }
@@ -97,14 +101,12 @@ struct PeacefulView: View {
             floatingEmojis.append(newEmoji)
         }
         
-        // Animate the emoji floating up
         withAnimation(.easeOut(duration: 1.0)) {
             if let index = floatingEmojis.firstIndex(where: { $0.id == newEmoji.id }) {
                 floatingEmojis[index].offset = 400
             }
         }
         
-        // Remove the emoji after animation
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             floatingEmojis.removeAll { $0.id == newEmoji.id }
         }
@@ -113,18 +115,70 @@ struct PeacefulView: View {
 
 struct YouTubePlayerView: UIViewRepresentable {
     let videoID: String
+    @Binding var isReady: Bool
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
     
     func makeUIView(context: Context) -> YTPlayerView {
         let playerView = YTPlayerView()
+        playerView.delegate = context.coordinator
+        
+        // Load with autoplay and minimal interface
         playerView.load(withVideoId: videoID, playerVars: [
             "playsinline": 1,
             "controls": 0,
             "showinfo": 0,
+            "modestbranding": 0,
             "rel": 0,
-            "modestbranding": 1
+            "autoplay": 1,
+            "iv_load_policy": 3,
+            "fs": 0,
+            "autohide": 1,
+            "origin": "https://www.yourapp.com",
+            "enablejsapi": 1,
+            "disablekb": 1,
+            "cc_load_policy": 0,
+            "loop": 1,
+            "color": "white",
+            "branding": 0,
+            "title": 0,
+            "byline": 0,
+            "portrait": 0
         ])
+        
+        // Additional styling to hide UI elements
+        playerView.webView?.isOpaque = false
+        playerView.webView?.backgroundColor = .clear
+        playerView.backgroundColor = .clear
+        
         return playerView
     }
     
     func updateUIView(_ uiView: YTPlayerView, context: Context) {}
+    
+    class Coordinator: NSObject, YTPlayerViewDelegate {
+        var parent: YouTubePlayerView
+        
+        init(_ parent: YouTubePlayerView) {
+            self.parent = parent
+        }
+        
+        func playerViewDidBecomeReady(_ playerView: YTPlayerView) {
+            // Start playing as soon as the player is ready
+            playerView.playVideo()
+            DispatchQueue.main.async {
+                self.parent.isReady = true
+            }
+        }
+        
+        func playerView(_ playerView: YTPlayerView, didChangeTo state: YTPlayerState) {
+            if state == .ended {
+                // Replay when video ends
+                playerView.seek(toSeconds: 0, allowSeekAhead: true)
+                playerView.playVideo()
+            }
+        }
+    }
 } 
