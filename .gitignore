@@ -232,3 +232,5 @@ htmlcov/
 
 # Appwrite specific
 .appwrite/
+
+TikTokClone/TikTokClone/Config/Secrets.swift

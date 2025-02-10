@@ -12,7 +12,7 @@ class AgoraManager: NSObject, ObservableObject {
     @Published var remoteUsersBPM: [UInt: Int] = [:] // Store remote users' BPM
     
     private var agoraEngine: AgoraRtcEngineKit?
-    private let appId = "100058b20ef3410997a741498f12e668"
+    private let appId = Secrets.Agora.appId
     private var currentChannelName: String?
     private var currentToken: String?
     private var streamId: Int = 0 // Store the data stream ID

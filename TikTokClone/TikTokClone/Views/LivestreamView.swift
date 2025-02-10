@@ -26,7 +26,6 @@ struct LivestreamView: View {
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @State private var isBroadcasting = false
     
-    private let token = "007eJxTYAhb46MeItyfWZoXP9u9rZpVMuSMxr2Z63b7HD+yPFGpp1yBwdDAwMDUIsnIIDXN2MTQwNLSPNHcxNDE0iLN0CjVzMzitNqq9IZARgahU1HMjAwQCOLzMJSkFpfoJmck5uWl5jAwAACGnh/b"
     private let channelName = "test-channel"
     
     var body: some View {
@@ -178,7 +177,7 @@ struct LivestreamView: View {
             print("📱 LivestreamView appeared")
             // Ensure we're connected as audience
             agoraManager.ensureConnection(
-                token: token,
+                token: Secrets.Agora.getToken(channelName: channelName),
                 channelName: channelName,
                 as: .audience
             )
