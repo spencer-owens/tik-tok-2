@@ -13,6 +13,7 @@ struct PeacefulView: View {
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @State private var floatingEmojis: [FloatingEmoji] = []
     @State private var isVideoReady = false
+    @State private var playerView: YTPlayerView?
     
     private let availableEmojis = ["❤️", "😊", "✨", "🙏", "🌟", "🕊️"]
     private let youtubeVideoId = "wKg71lcs5Nw"
@@ -69,13 +70,13 @@ struct PeacefulView: View {
             }
         }
         .onAppear {
-            print("🎬 PeacefulView appeared")
+            print("🎭 PeacefulView appeared")
             Task {
                 await appwriteManager.startListeningToReactions()
             }
         }
         .onDisappear {
-            print("🔚 PeacefulView disappeared")
+            print("👋 PeacefulView disappeared")
             Task {
                 await appwriteManager.stopListeningToReactions()
             }
@@ -122,6 +123,7 @@ struct YouTubePlayerView: UIViewRepresentable {
     }
     
     func makeUIView(context: Context) -> YTPlayerView {
+        print("📺 Creating YouTube player")
         let playerView = YTPlayerView()
         playerView.delegate = context.coordinator
         
@@ -156,29 +158,63 @@ struct YouTubePlayerView: UIViewRepresentable {
         return playerView
     }
     
-    func updateUIView(_ uiView: YTPlayerView, context: Context) {}
+    func updateUIView(_ uiView: YTPlayerView, context: Context) {
+        // Handle any view updates if needed
+    }
     
     class Coordinator: NSObject, YTPlayerViewDelegate {
         var parent: YouTubePlayerView
+        private var hasAttemptedPlay = false
         
         init(_ parent: YouTubePlayerView) {
             self.parent = parent
+            super.init()
         }
         
         func playerViewDidBecomeReady(_ playerView: YTPlayerView) {
-            // Start playing as soon as the player is ready
-            playerView.playVideo()
+            print("🎬 YouTube player ready")
             DispatchQueue.main.async {
                 self.parent.isReady = true
+                // Start playing with a slight delay to ensure player is fully ready
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    print("▶️ Starting playback")
+                    playerView.playVideo()
+                }
             }
         }
         
         func playerView(_ playerView: YTPlayerView, didChangeTo state: YTPlayerState) {
-            if state == .ended {
-                // Replay when video ends
+            switch state {
+            case .ended:
+                print("🔄 Video ended, replaying")
                 playerView.seek(toSeconds: 0, allowSeekAhead: true)
                 playerView.playVideo()
+            case .paused:
+                print("⏸️ Video paused")
+                // If video was paused and we haven't tried to play yet, attempt to play
+                if !hasAttemptedPlay {
+                    hasAttemptedPlay = true
+                    print("🔄 Attempting to resume playback")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        playerView.playVideo()
+                    }
+                }
+            case .playing:
+                print("▶️ Video playing")
+                hasAttemptedPlay = false
+            case .buffering:
+                print("⏳ Video buffering")
+            case .unstarted:
+                print("⭕️ Video unstarted")
+            case .cued:
+                print("📋 Video cued")
+            @unknown default:
+                print("❓ Unknown player state")
             }
+        }
+        
+        func playerView(_ playerView: YTPlayerView, receivedError error: YTPlayerError) {
+            print("❌ YouTube player error: \(error.rawValue)")
         }
     }
 } 
