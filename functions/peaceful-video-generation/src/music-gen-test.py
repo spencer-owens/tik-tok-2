@@ -19,9 +19,15 @@ def init_appwrite(context):
     """Initialize Appwrite client with function context."""
     global client, databases
     client = Client()
+    
+    # Log available environment info
+    context.log("Available environment variables:")
+    context.log(str(dir(context)))
+    
+    # Initialize with function environment
     client.set_endpoint('https://cloud.appwrite.io/v1')
-    client.set_project(context.env.get('APPWRITE_FUNCTION_PROJECT_ID', ''))
-    client.set_key(context.env.get('APPWRITE_FUNCTION_API_KEY', ''))
+    client.set_project(os.getenv('APPWRITE_FUNCTION_PROJECT_ID', ''))
+    client.set_key(os.getenv('APPWRITE_FUNCTION_API_KEY', ''))
     databases = Databases(client)
 
 # Constants
