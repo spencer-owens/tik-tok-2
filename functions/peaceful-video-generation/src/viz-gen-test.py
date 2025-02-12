@@ -42,7 +42,7 @@ async def generate_visualization(context, input_params):
     """Async function to generate infinite zoom visualization using Replicate."""
     try:
         return replicate.run(
-            "arielreplicate/stable_diffusion_infinite_zoom",
+            "arielreplicate/stable-diffusion-infinite-zoom:b22679e6359c1fc9a3cba19f88e37f9e3f04a695c9e0ec33e182ec21e33b9a9b",
             input=input_params
         )
     except Exception as e:
