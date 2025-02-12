@@ -39,14 +39,19 @@ def safe_json_dumps(obj):
     return json.dumps(obj, indent=2, default=str)
 
 async def generate_visualization(context, input_params):
-    """Async function to generate infinite zoom visualization using Replicate."""
+    """Async function to generate visualization using Luma Ray."""
     try:
+        # Log the API token status
+        context.log(f"Using Replicate API token: {'Present' if os.getenv('REPLICATE_API_TOKEN') else 'Missing'}")
+        
         return replicate.run(
-            "arielreplicate/stable-diffusion-infinite-zoom:b22679e6359c1fc9a3cba19f88e37f9e3f04a695c9e0ec33e182ec21e33b9a9b",
+            "luma/ray:7ddf35fc6e0b39c37c0f1af258f19ac525b08f03f4be02a196a19ca2b4f512a5",
             input=input_params
         )
     except Exception as e:
         context.error(f"Visualization generation error: {str(e)}")
+        context.error(f"Error type: {type(e).__name__}")
+        context.error(f"Full error details: {str(e)}")
         raise
 
 def create_job_document(prompt):
@@ -142,10 +147,17 @@ async def main(context):
     context.log("✅ Found Replicate API token")
     
     try:
-        # Prepare input parameters
+        # Prepare input parameters for Luma Ray
         input_params = {
-            "prompt": "beautiful abstract infinite zoom visual, 10 seconds long",
-            "duration": 10
+            "prompt": "beautiful abstract peaceful animation, soft flowing colors, gentle transitions, meditative visuals",
+            "negative_prompt": "text, watermark, ugly, distorted, noisy",
+            "fps": 30,
+            "num_frames": 90,  # 3 seconds at 30fps
+            "guidance_scale": 7.5,
+            "num_inference_steps": 50,
+            "width": 512,
+            "height": 512,
+            "scheduler": "DPM++ Karras SDE"
         }
         context.log(f"Input parameters: {safe_json_dumps(input_params)}")
         
