@@ -51,18 +51,23 @@ def download_file(url, local_filename, context):
         raise
 
 def generate_music(context):
-    """Generate peaceful music using Replicate's minimax/music-01 model."""
+    """Generate peaceful music using Meta's MusicGen model."""
     context.log("🎵 Starting music generation")
     try:
         client = replicate.Client(api_token=os.getenv("REPLICATE_API_KEY"))
         context.log("Replicate client initialized")
         
-        context.log("Sending request to music generation model")
+        context.log("Sending request to MusicGen model")
         output = client.run(
-            "minimax/music-01",
+            "meta/musicgen",
             input={
-                "prompt": "peaceful ambient meditation music, calming lofi beats, gentle and soothing",
-                "duration": 10
+                "model_version": "large",
+                "prompt": "peaceful ambient meditation music, calming lofi beats, gentle and soothing, no lyrics, soft piano and strings",
+                "duration": 10,
+                "temperature": 0.7,
+                "top_k": 250,
+                "top_p": 0.99,
+                "classifier_free_guidance": 3
             }
         )
         
