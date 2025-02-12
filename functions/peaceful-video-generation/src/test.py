@@ -7,16 +7,9 @@ import replicate
 # Load environment variables
 load_dotenv()
 
-class DateTimeEncoder(json.JSONEncoder):
-    """Custom JSON encoder for datetime objects."""
-    def default(self, obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        return super().default(obj)
-
-def safe_json_dumps(obj, indent=2):
-    """Safely convert object to JSON string, handling datetime objects."""
-    return json.dumps(obj, indent=indent, cls=DateTimeEncoder)
+def safe_json_dumps(obj):
+    """Safely convert object to JSON string."""
+    return json.dumps(obj, indent=2, default=str)
 
 def main(context):
     """Test function focusing on music generation with detailed logging."""
@@ -25,11 +18,9 @@ def main(context):
     # Log request details
     context.log(f"Request method: {context.req.method}")
     context.log(f"Request headers: {safe_json_dumps(dict(context.req.headers))}")
-    context.log(f"Request body: {context.req.bodyText if hasattr(context.req, 'bodyText') else 'No body'}")
     
-    # Log environment check
+    # Check environment
     replicate_api_key = os.getenv("REPLICATE_API_KEY")
-    context.log(f"Replicate API key present: {bool(replicate_api_key)}")
     if not replicate_api_key:
         context.error("❌ REPLICATE_API_KEY not found in environment")
         return context.res.json({
@@ -38,34 +29,7 @@ def main(context):
         })
     
     try:
-        # Initialize Replicate client
-        context.log("🔄 Initializing Replicate client")
-        client = replicate.Client(api_token=replicate_api_key)
-        context.log("✅ Replicate client initialized successfully")
-        
-        # Log available models (this will help us debug the 404)
-        context.log("📚 Fetching model information")
-        model = client.models.get("meta/musicgen")
-        model_dict = {
-            "name": model.name,
-            "description": model.description,
-            "owner": model.owner,
-            "visibility": model.visibility,
-            "latest_version": model.latest_version
-        }
-        context.log(f"Model info: {safe_json_dumps(model_dict)}")
-        
-        # Get latest version
-        context.log("🔍 Getting latest model version")
-        version = model.versions.list()[0]
-        version_dict = {
-            "id": version.id,
-            "created_at": version.created_at,
-            "cog_version": version.cog_version
-        }
-        context.log(f"Latest version info: {safe_json_dumps(version_dict)}")
-        
-        # Prepare generation parameters
+        # Prepare input parameters
         input_params = {
             "model_version": "large",
             "prompt": "peaceful ambient meditation music, calming lofi beats, gentle and soothing, no lyrics, soft piano and strings",
@@ -78,15 +42,29 @@ def main(context):
         }
         context.log(f"Input parameters: {safe_json_dumps(input_params)}")
         
-        # Attempt music generation
+        # Run the model using replicate.run()
         context.log("🎵 Starting music generation")
-        output = version.predict(**input_params)
-        context.log(f"✅ Music generation successful")
-        context.log(f"Output: {safe_json_dumps(output)}")
+        output = replicate.run(
+            "meta/musicgen:7a76a8258b23fae65c5a22debb8841d1d7e816b75c2f24218cd2bd8573787906",
+            input=input_params
+        )
+        
+        # Handle the output based on type
+        if isinstance(output, list):
+            context.log("✅ Received list output")
+            context.log(f"Number of outputs: {len(output)}")
+            for i, item in enumerate(output):
+                if hasattr(item, 'read'):  # FileOutput object
+                    context.log(f"Output {i} is a file")
+                else:
+                    context.log(f"Output {i}: {str(item)}")
+        else:
+            context.log("✅ Received single output")
+            context.log(f"Output: {str(output)}")
         
         return context.res.json({
             "success": True,
-            "output": output,
+            "output": str(output),
             "message": "Music generation test completed successfully"
         })
             
@@ -107,8 +85,6 @@ def main(context):
     except Exception as e:
         context.error(f"❌ Unexpected error: {str(e)}")
         context.error(f"Error type: {type(e).__name__}")
-        if hasattr(e, '__dict__'):
-            context.error(f"Error attributes: {safe_json_dumps(e.__dict__)}")
         return context.res.json({
             "success": False,
             "error": str(e),
