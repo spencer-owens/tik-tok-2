@@ -45,7 +45,7 @@ async def generate_visualization(context, input_params):
         context.log(f"Using Replicate API token: {'Present' if os.getenv('REPLICATE_API_TOKEN') else 'Missing'}")
         
         return replicate.run(
-            "luma/ray:7ddf35fc6e0b39c37c0f1af258f19ac525b08f03f4be02a196a19ca2b4f512a5",
+            "luma/ray",
             input=input_params
         )
     except Exception as e:
