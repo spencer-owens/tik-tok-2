@@ -12,9 +12,17 @@ import replicate
 load_dotenv()
 
 # Initialize Appwrite (using function context)
-client = Client()
-# No need to set endpoint, project ID, or key - these are handled by the function environment
-databases = Databases(client)
+client = None
+databases = None
+
+def init_appwrite(context):
+    """Initialize Appwrite client with function context."""
+    global client, databases
+    client = Client()
+    client.set_endpoint('https://cloud.appwrite.io/v1')
+    client.set_project(context.req.variables.get('APPWRITE_FUNCTION_PROJECT_ID'))
+    client.set_key(context.req.variables.get('APPWRITE_FUNCTION_API_KEY'))
+    databases = Databases(client)
 
 # Constants
 DATABASE_ID = "67a580230029e01e56af"
@@ -98,6 +106,10 @@ async def main(context):
     """Main function handler for music generation."""
     start_time = time.time()
     context.log("🎯 Test function entry point reached")
+    
+    # Initialize Appwrite
+    init_appwrite(context)
+    context.log("✅ Initialized Appwrite client")
     
     # Log request details
     context.log(f"Request method: {context.req.method}")
