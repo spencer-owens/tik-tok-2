@@ -94,10 +94,14 @@ async def process_visualization_generation(context, job_id, input_params, start_
         # Calculate execution time
         execution_time = time.time() - start_time
         
+        # Log the output type and structure
+        context.log(f"Output type: {type(output)}")
+        context.log(f"Output value: {str(output)}")
+        
         # Update job with success
         update_job_document(job_id, {
             'status': 'completed',
-            'output_url': str(output) if isinstance(output, str) else str(output[0]),
+            'output_url': str(output),  # Luma Ray returns a single URL string
             'execution_time_seconds': round(execution_time, 2)
         })
         
