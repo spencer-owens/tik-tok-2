@@ -39,13 +39,13 @@ def safe_json_dumps(obj):
     return json.dumps(obj, indent=2, default=str)
 
 async def generate_visualization(context, input_params):
-    """Async function to generate visualization using Luma Ray."""
+    """Async function to generate infinite zoom visualization using Replicate."""
     try:
         # Log the API token status
         context.log(f"Using Replicate API token: {'Present' if os.getenv('REPLICATE_API_TOKEN') else 'Missing'}")
         
         return replicate.run(
-            "luma/ray",
+            "arielreplicate/stable_diffusion_infinite_zoom",
             input=input_params
         )
     except Exception as e:
@@ -147,17 +147,15 @@ async def main(context):
     context.log("✅ Found Replicate API token")
     
     try:
-        # Prepare input parameters for Luma Ray
+        # Prepare input parameters for infinite zoom
         input_params = {
-            "prompt": "beautiful abstract peaceful animation, soft flowing colors, gentle transitions, meditative visuals",
-            "negative_prompt": "text, watermark, ugly, distorted, noisy",
-            "fps": 30,
-            "num_frames": 90,  # 3 seconds at 30fps
-            "guidance_scale": 7.5,
-            "num_inference_steps": 50,
-            "width": 512,
-            "height": 512,
-            "scheduler": "DPM++ Karras SDE"
+            "prompt": "beautiful abstract peaceful infinite zoom visual, soft flowing colors, gentle transitions, meditative visuals",
+            "duration": 10,  # Duration in seconds
+            "fps": 24,  # Default frame rate
+            "zoom_speed": 1.0,  # Default zoom speed
+            "min_sigma": 0.5,  # Default minimum noise
+            "max_sigma": 0.8,  # Default maximum noise
+            "frames_per_zoom": 150  # Default frames per zoom cycle
         }
         context.log(f"Input parameters: {safe_json_dumps(input_params)}")
         
