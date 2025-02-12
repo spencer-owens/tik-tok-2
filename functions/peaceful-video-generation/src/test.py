@@ -20,13 +20,15 @@ def main(context):
     context.log(f"Request headers: {safe_json_dumps(dict(context.req.headers))}")
     
     # Check environment
-    replicate_api_key = os.getenv("REPLICATE_API_KEY")
-    if not replicate_api_key:
-        context.error("❌ REPLICATE_API_KEY not found in environment")
+    replicate_token = os.getenv("REPLICATE_API_TOKEN")
+    if not replicate_token:
+        context.error("❌ REPLICATE_API_TOKEN not found in environment")
         return context.res.json({
             "success": False,
-            "error": "Missing REPLICATE_API_KEY"
+            "error": "Missing REPLICATE_API_TOKEN. Please set the REPLICATE_API_TOKEN environment variable."
         })
+    
+    context.log("✅ Found Replicate API token")
     
     try:
         # Prepare input parameters
