@@ -14,18 +14,18 @@ def safe_json_dumps(obj):
     return json.dumps(obj, indent=2, default=str)
 
 async def generate_music(context, input_params):
-    """Async function to handle music generation."""
+    """Async function to generate music using Replicate."""
     try:
         return replicate.run(
             "meta/musicgen:7a76a8258b23fae65c5a22debb8841d1d7e816b75c2f24218cd2bd8573787906",
             input=input_params
         )
     except Exception as e:
-        context.error(f"Error in generate_music: {str(e)}")
+        context.error(f"Music generation error: {str(e)}")
         raise
 
-async def main(context):
-    """Test function focusing on music generation with detailed logging."""
+def main(context):
+    """Main function handler for music generation."""
     start_time = time.time()
     context.log("🎯 Test function entry point reached")
     
@@ -34,9 +34,8 @@ async def main(context):
     context.log(f"Request path: {context.req.path}")
     context.log(f"Request headers: {safe_json_dumps(dict(context.req.headers))}")
     
-    # Handle non-API requests
+    # Handle non-API requests (like favicon.png)
     if context.req.path and context.req.path != "/":
-        context.error(f"❌ Invalid path requested: {context.req.path}")
         return context.res.json({
             "success": False,
             "error": "Invalid endpoint. Please use the root path '/' for music generation.",
@@ -68,49 +67,40 @@ async def main(context):
         }
         context.log(f"Input parameters: {safe_json_dumps(input_params)}")
         
-        # Run the model using replicate.run()
+        # Start music generation
         context.log("🎵 Starting music generation")
         context.log(f"⏱️ Time elapsed before model run: {time.time() - start_time:.2f}s")
         
-        # Use asyncio.create_task to handle the long-running operation
-        try:
-            # Create a task with timeout
-            task = asyncio.create_task(generate_music(context, input_params))
-            output = await asyncio.wait_for(task, timeout=25.0)  # Set timeout to 25s to ensure we stay under 30s limit
-            
-            context.log(f"⏱️ Time elapsed after model run: {time.time() - start_time:.2f}s")
-            
-            # Handle the output based on type
-            if isinstance(output, list):
-                context.log("✅ Received list output")
-                context.log(f"Number of outputs: {len(output)}")
-                for i, item in enumerate(output):
-                    if hasattr(item, 'read'):  # FileOutput object
-                        context.log(f"Output {i} is a file")
-                    else:
-                        context.log(f"Output {i}: {str(item)}")
-            else:
-                context.log("✅ Received single output")
-                context.log(f"Output: {str(output)}")
-            
-            total_time = time.time() - start_time
-            context.log(f"⏱️ Total execution time: {total_time:.2f}s")
-            
-            return context.res.json({
-                "success": True,
-                "output": str(output),
-                "message": "Music generation test completed successfully",
-                "execution_time_seconds": round(total_time, 2)
-            })
-            
-        except asyncio.TimeoutError:
-            context.error("❌ Operation timed out")
-            return context.res.json({
-                "success": False,
-                "error": "Operation timed out. Please try again.",
-                "error_type": "TimeoutError",
-                "execution_time_seconds": round(time.time() - start_time, 2)
-            }, 408)
+        # Execute music generation
+        output = generate_music(context, input_params)
+        
+        # Log timing
+        generation_time = time.time() - start_time
+        context.log(f"⏱️ Time elapsed after model run: {generation_time:.2f}s")
+        
+        # Handle the output
+        if isinstance(output, list):
+            context.log("✅ Received list output")
+            context.log(f"Number of outputs: {len(output)}")
+            for i, item in enumerate(output):
+                if hasattr(item, 'read'):
+                    context.log(f"Output {i} is a file")
+                else:
+                    context.log(f"Output {i}: {str(item)}")
+        else:
+            context.log("✅ Received single output")
+            context.log(f"Output: {str(output)}")
+        
+        # Return success response
+        total_time = time.time() - start_time
+        context.log(f"⏱️ Total execution time: {total_time:.2f}s")
+        
+        return context.res.json({
+            "success": True,
+            "output": str(output),
+            "message": "Music generation started. Check the status URL for completion.",
+            "execution_time_seconds": round(total_time, 2)
+        })
             
     except replicate.exceptions.ModelError as e:
         context.error(f"❌ Model error: {str(e)}")
@@ -119,7 +109,7 @@ async def main(context):
             "error": f"Model error: {str(e)}",
             "error_type": "ModelError",
             "execution_time_seconds": round(time.time() - start_time, 2)
-        })
+        }, 500)
     except replicate.exceptions.ReplicateError as e:
         context.error(f"❌ Replicate error: {str(e)}")
         return context.res.json({
@@ -127,7 +117,7 @@ async def main(context):
             "error": f"Replicate error: {str(e)}",
             "error_type": "ReplicateError",
             "execution_time_seconds": round(time.time() - start_time, 2)
-        })
+        }, 500)
     except Exception as e:
         context.error(f"❌ Unexpected error: {str(e)}")
         context.error(f"Error type: {type(e).__name__}")
@@ -136,4 +126,4 @@ async def main(context):
             "error": str(e),
             "error_type": type(e).__name__,
             "execution_time_seconds": round(time.time() - start_time, 2)
-        }) 
+        }, 500) 
