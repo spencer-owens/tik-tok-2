@@ -1,5 +1,7 @@
 import os
 import json
+import time
+import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
 import replicate
@@ -11,8 +13,9 @@ def safe_json_dumps(obj):
     """Safely convert object to JSON string."""
     return json.dumps(obj, indent=2, default=str)
 
-def main(context):
+async def main(context):
     """Test function focusing on music generation with detailed logging."""
+    start_time = time.time()
     context.log("🎯 Test function entry point reached")
     
     # Log request details
@@ -46,10 +49,16 @@ def main(context):
         
         # Run the model using replicate.run()
         context.log("🎵 Starting music generation")
-        output = replicate.run(
+        context.log(f"⏱️ Time elapsed before model run: {time.time() - start_time:.2f}s")
+        
+        # Create a task for the model run
+        loop = asyncio.get_event_loop()
+        output = await loop.run_in_executor(None, lambda: replicate.run(
             "meta/musicgen:7a76a8258b23fae65c5a22debb8841d1d7e816b75c2f24218cd2bd8573787906",
             input=input_params
-        )
+        ))
+        
+        context.log(f"⏱️ Time elapsed after model run: {time.time() - start_time:.2f}s")
         
         # Handle the output based on type
         if isinstance(output, list):
@@ -64,10 +73,14 @@ def main(context):
             context.log("✅ Received single output")
             context.log(f"Output: {str(output)}")
         
+        total_time = time.time() - start_time
+        context.log(f"⏱️ Total execution time: {total_time:.2f}s")
+        
         return context.res.json({
             "success": True,
             "output": str(output),
-            "message": "Music generation test completed successfully"
+            "message": "Music generation test completed successfully",
+            "execution_time_seconds": round(total_time, 2)
         })
             
     except replicate.exceptions.ModelError as e:
@@ -75,14 +88,16 @@ def main(context):
         return context.res.json({
             "success": False,
             "error": f"Model error: {str(e)}",
-            "error_type": "ModelError"
+            "error_type": "ModelError",
+            "execution_time_seconds": round(time.time() - start_time, 2)
         })
     except replicate.exceptions.ReplicateError as e:
         context.error(f"❌ Replicate error: {str(e)}")
         return context.res.json({
             "success": False,
             "error": f"Replicate error: {str(e)}",
-            "error_type": "ReplicateError"
+            "error_type": "ReplicateError",
+            "execution_time_seconds": round(time.time() - start_time, 2)
         })
     except Exception as e:
         context.error(f"❌ Unexpected error: {str(e)}")
@@ -90,5 +105,6 @@ def main(context):
         return context.res.json({
             "success": False,
             "error": str(e),
-            "error_type": type(e).__name__
+            "error_type": type(e).__name__,
+            "execution_time_seconds": round(time.time() - start_time, 2)
         }) 
