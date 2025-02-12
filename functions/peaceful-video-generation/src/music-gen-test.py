@@ -161,14 +161,31 @@ async def main(context):
         context.log(f"✅ Created job document with ID: {job_id}")
         
         # Start background processing
-        asyncio.create_task(process_music_generation(context, job_id, input_params, start_time))
+        # Create a task and add it to the event loop
+        task = asyncio.create_task(process_music_generation(context, job_id, input_params, start_time))
         
         # Return job ID immediately
-        return context.res.json({
+        response = context.res.json({
             "success": True,
             "message": "Music generation job created",
             "job_id": job_id
         })
+        
+        # Let the task run in the background
+        # The function will keep running until the task completes
+        try:
+            await asyncio.wait_for(task, timeout=180)  # 3 minute timeout
+        except asyncio.TimeoutError:
+            context.error("❌ Music generation timed out")
+            update_job_document(job_id, {
+                'status': 'failed',
+                'error': 'Operation timed out',
+                'execution_time_seconds': round(time.time() - start_time, 2)
+            })
+        except Exception as e:
+            context.error(f"❌ Background task error: {str(e)}")
+        
+        return response
             
     except Exception as e:
         context.error(f"❌ Setup error: {str(e)}")
