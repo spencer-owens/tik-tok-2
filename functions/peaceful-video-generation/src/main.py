@@ -59,7 +59,7 @@ def generate_music(context):
         
         context.log("Sending request to MusicGen model")
         output = client.run(
-            "meta/musicgen",
+            "meta/musicgen:7a76a8258b23fae65c5a22debb8841d1d7e816b75c2f24218cd2bd8573787906",
             input={
                 "model_version": "large",
                 "prompt": "peaceful ambient meditation music, calming lofi beats, gentle and soothing, no lyrics, soft piano and strings",
@@ -67,7 +67,8 @@ def generate_music(context):
                 "temperature": 0.7,
                 "top_k": 250,
                 "top_p": 0.99,
-                "classifier_free_guidance": 3
+                "classifier_free_guidance": 3,
+                "output_format": "mp3"
             }
         )
         
