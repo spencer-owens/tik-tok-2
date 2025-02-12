@@ -113,17 +113,15 @@ async def main(context):
         }, 404)
     
     # Check environment variables
-    required_vars = ['REPLICATE_API_TOKEN', 'APPWRITE_PROJECT_ID', 'APPWRITE_API_KEY']
-    missing_vars = [var for var in required_vars if not os.getenv(var)]
-    if missing_vars:
-        error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
+    if not os.getenv('REPLICATE_API_TOKEN'):
+        error_msg = "Missing REPLICATE_API_TOKEN environment variable"
         context.error(f"❌ {error_msg}")
         return context.res.json({
             "success": False,
             "error": error_msg
         }, 500)
     
-    context.log("✅ Found all required environment variables")
+    context.log("✅ Found Replicate API token")
     
     try:
         # Prepare input parameters
