@@ -180,14 +180,20 @@ class Appwrite {
     }
     
     public func getRandomVideoId(for activity: MediaAsset.ActivityCategory) -> String {
+        print("🎥 Getting video for activity: \(activity)")
+        let videoId: String
         switch activity {
         case .walking:
-            return MediaIDs.muxVideos["walking"]!.randomElement()!
+            videoId = MediaIDs.muxVideos["walking"]!.randomElement()!
+            print("🚶‍♂️ Selected walking video: \(videoId)")
         case .meal:
-            return MediaIDs.muxVideos["cooking"]!.randomElement()!
+            videoId = MediaIDs.muxVideos["cooking"]!.randomElement()!
+            print("🍽️ Selected meal video: \(videoId)")
         case .meditation:
-            return MediaIDs.muxVideos["meditation"]!.first!
+            videoId = MediaIDs.muxVideos["meditation"]!.first! // Always use the first (and only) meditation video
+            print("🧘‍♂️ Selected meditation video: \(videoId)")
         }
+        return videoId
     }
     
     // MARK: - Reactions Methods

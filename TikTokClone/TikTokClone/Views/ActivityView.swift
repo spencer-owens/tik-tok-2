@@ -13,163 +13,142 @@ class ActivityViewModel: ObservableObject {
     private var timeObserver: Any?
     private let appwriteManager = AppwriteManager.shared
     
-    // Cache for audio data
-    private var audioCache: [String: Data] = [:]
-    private var preloadedAudioPlayer: AVPlayer?
-    private var preloadedVideoPlayer: AVPlayer?
-    
-    // Preload the next activity's media
-    func preloadNextActivity() async {
-        let nextActivity = getNextActivity()
-        print("Preloading media for next activity: \(nextActivity)")
-        
-        // Load media for next activity
-        await appwriteManager.loadMediaForActivity(nextActivity)
-        
-        // Preload video
-        if let videoId = appwriteManager.currentVideoId,
-           let videoUrl = appwriteManager.getMuxStreamUrl(for: videoId) {
-            let playerItem = AVPlayerItem(url: videoUrl)
-            preloadedVideoPlayer = AVPlayer(playerItem: playerItem)
-            preloadedVideoPlayer?.isMuted = true
-            // Preload by starting and immediately pausing
-            preloadedVideoPlayer?.play()
-            preloadedVideoPlayer?.pause()
-        }
-        
-        // Preload audio if needed
-        if nextActivity != .meditation {
-            await preloadAudio()
-        }
-    }
-    
-    private func preloadAudio() async {
-        guard let audioUrl = appwriteManager.currentAudioUrl else { return }
-        
-        // Check cache first
-        let urlString = audioUrl.absoluteString
-        if audioCache[urlString] != nil {
-            print("Audio already cached")
-            return
-        }
-        
-        do {
-            let (data, _) = try await URLSession.shared.data(from: audioUrl)
-            audioCache[urlString] = data
-            print("Cached audio data: \(data.count) bytes")
-            
-            // Create and preload audio player
-            let playerItem = AVPlayerItem(url: audioUrl)
-            preloadedAudioPlayer = AVPlayer(playerItem: playerItem)
-            preloadedAudioPlayer?.play()
-            preloadedAudioPlayer?.pause()
-        } catch {
-            print("Failed to preload audio: \(error)")
-        }
-    }
-    
-    private func getNextActivity() -> MediaAsset.ActivityCategory {
-        // Simple implementation - could be more sophisticated
-        switch currentActivityType {
-        case .meditation:
-            return .walking
-        case .walking:
-            return .meal
-        case .meal:
-            return .meditation
-        }
-    }
-    
     func getCurrentActivity() -> MediaAsset.ActivityCategory {
         let calendar = Calendar.current
-        let currentDate = ScheduleView.getCurrentTime()  // Use the override-aware time
+        let currentDate = ScheduleView.getCurrentTime()
         let scheduleItems = ScheduleView.createSchedule()
+        
+        print("🕒 Current time: \(timeFormatter.string(from: currentDate))")
         
         for (index, item) in scheduleItems.enumerated() {
             let itemTime = calendar.dateComponents([.hour, .minute], from: item.time)
             let currentTime = calendar.dateComponents([.hour, .minute], from: currentDate)
+            
+            print("📅 Checking slot: \(timeFormatter.string(from: item.time)) - \(item.activity)")
             
             if index < scheduleItems.count - 1 {
                 let nextItem = scheduleItems[index + 1]
                 let nextTime = calendar.dateComponents([.hour, .minute], from: nextItem.time)
                 
                 if isTime(currentTime, betweenOrEqual: itemTime, and: nextTime) {
-                    switch item.type {
-                    case .meditation:
-                        return .meditation
-                    case .walking:
-                        return .walking
-                    case .meal:
-                        return .meal
-                    case .other:
-                        return .meditation
-                    }
+                    print("✅ Found matching time slot: \(item.activity)")
+                    return activityTypeFor(scheduleItem: item)
                 }
+            } else if isTime(currentTime, afterOrEqual: itemTime) {
+                print("✅ In final time slot of the day: \(item.activity)")
+                return activityTypeFor(scheduleItem: item)
             }
         }
+        
+        print("⚠️ No matching time slot found, defaulting to meditation")
         return .meditation
+    }
+    
+    private func activityTypeFor(scheduleItem: ScheduleItem) -> MediaAsset.ActivityCategory {
+        switch scheduleItem.type {
+        case .meditation:
+            print("🧘‍♂️ Activity: Guided Meditation")
+            return .meditation
+        case .walking:
+            print("🚶‍♂️ Activity: Walking Meditation")
+            return .walking
+        case .meal:
+            print("🍽️ Activity: Mindful Meal")
+            return .meal
+        case .other:
+            print("⭐️ Other activity, defaulting to meditation")
+            return .meditation
+        }
     }
     
     private func isTime(_ time: DateComponents, betweenOrEqual start: DateComponents, and end: DateComponents) -> Bool {
         let timeMinutes = time.hour! * 60 + time.minute!
         let startMinutes = start.hour! * 60 + start.minute!
         let endMinutes = end.hour! * 60 + end.minute!
-        
         return timeMinutes >= startMinutes && timeMinutes < endMinutes
+    }
+    
+    private func isTime(_ time: DateComponents, afterOrEqual start: DateComponents) -> Bool {
+        let timeMinutes = time.hour! * 60 + time.minute!
+        let startMinutes = start.hour! * 60 + start.minute!
+        return timeMinutes >= startMinutes
     }
     
     func loadAndPlayMedia() async {
         isLoading = true
         statusMessage = "Loading media..."
         
-        // Setup audio session first
+        // Stop any existing playback
+        await stopPlayback()
+        
+        // Configure audio session first
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            print("Failed to set up audio session: \(error)")
+            print("❌ Failed to set up audio session: \(error)")
             statusMessage = "Audio setup failed"
         }
         
-        await stopPlayback()
+        // Get current activity type
         currentActivityType = getCurrentActivity()
-        print("Current activity type: \(currentActivityType)")
+        print("🎯 Starting playback for: \(currentActivityType)")
         
-        // Check if we have preloaded media
-        if let preloadedVideo = preloadedVideoPlayer,
-           currentActivityType != .meditation {
-            print("Using preloaded video")
-            videoPlayer = preloadedVideo
-            await videoPlayer?.seek(to: .zero)
-            videoPlayer?.play()
-        } else {
-            // Load new media normally
-            await appwriteManager.loadMediaForActivity(currentActivityType)
+        // Load media from Appwrite
+        await appwriteManager.loadMediaForActivity(currentActivityType)
+        
+        // Setup and play video
+        if let videoId = appwriteManager.currentVideoId,
+           let videoUrl = appwriteManager.getMuxStreamUrl(for: videoId) {
+            print("🎥 Playing video: \(videoId)")
             
-            if let videoId = appwriteManager.currentVideoId,
-               let videoUrl = appwriteManager.getMuxStreamUrl(for: videoId) {
-                print("Setting up new video with ID: \(videoId)")
-                
-                let playerItem = AVPlayerItem(url: videoUrl)
-                videoPlayer = AVPlayer(playerItem: playerItem)
-                videoPlayer?.isMuted = (currentActivityType != .meditation)
-                videoPlayer?.play()
+            let playerItem = AVPlayerItem(url: videoUrl)
+            videoPlayer = AVPlayer(playerItem: playerItem)
+            
+            // Configure audio based on activity type
+            if currentActivityType == .meditation {
+                print("🔊 Enabling video sound for meditation")
+                videoPlayer?.isMuted = false
+                // Set volume to full for meditation
+                videoPlayer?.volume = 1.0
+            } else {
+                print("🔇 Muting video for non-meditation activity")
+                videoPlayer?.isMuted = true
             }
+            
+            videoPlayer?.play()
+            setupVideoLooping()
         }
         
-        // Setup video looping
-        setupVideoLooping()
-        
-        // For walking and meal times, add our custom audio
-        if currentActivityType != .meditation {
-            await setupCustomAudio()
+        // Setup and play audio for non-meditation activities
+        if currentActivityType != .meditation,
+           let audioUrl = appwriteManager.currentAudioUrl {
+            print("🔊 Setting up background audio")
+            
+            let playerItem = AVPlayerItem(url: audioUrl)
+            audioPlayer = AVPlayer(playerItem: playerItem)
+            
+            // Set background audio volume
+            audioPlayer?.volume = 1.0
+            print("▶️ Starting background audio playback")
+            audioPlayer?.play()
+            
+            // Setup audio looping
+            NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: playerItem,
+                queue: .main
+            ) { [weak self] _ in
+                print("🔄 Looping background audio")
+                Task { @MainActor in
+                    await self?.audioPlayer?.seek(to: .zero)
+                    self?.audioPlayer?.play()
+                }
+            }
         }
         
         isLoading = false
         statusMessage = "Playing \(currentActivityType)"
-        
-        // Preload next activity's media
-        await preloadNextActivity()
     }
     
     private func setupVideoLooping() {
@@ -188,87 +167,35 @@ class ActivityViewModel: ObservableObject {
         }
     }
     
-    private func setupCustomAudio() async {
-        // Check if we have preloaded audio
-        if let preloadedAudio = preloadedAudioPlayer {
-            print("Using preloaded audio")
-            audioPlayer = preloadedAudio
-            await audioPlayer?.seek(to: .zero)
-            audioPlayer?.play()
-            return
-        }
-        
-        guard let audioUrl = appwriteManager.currentAudioUrl else {
-            print("No audio URL available")
-            return
-        }
-        
-        print("Setting up new audio from: \(audioUrl)")
-        
-        do {
-            let urlString = audioUrl.absoluteString
-            let audioData: Data
-            
-            // Try to get from cache first
-            if let cachedData = audioCache[urlString] {
-                print("Using cached audio data")
-                audioData = cachedData
-            } else {
-                // Download and cache if not available
-                let (data, _) = try await URLSession.shared.data(from: audioUrl)
-                audioData = data
-                audioCache[urlString] = data
-                print("Downloaded and cached new audio data")
-            }
-            
-            let audioItem = AVPlayerItem(url: audioUrl)
-            audioPlayer = AVPlayer(playerItem: audioItem)
-            
-            // Setup audio looping
-            NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: audioItem,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor in
-                    await self?.audioPlayer?.seek(to: .zero)
-                    self?.audioPlayer?.play()
-                }
-            }
-            
-            audioPlayer?.play()
-            print("Started audio playback")
-            
-        } catch {
-            print("Failed to setup audio: \(error)")
-            statusMessage = "Audio setup failed: \(error.localizedDescription)"
-        }
-    }
-    
     func stopPlayback() async {
+        // Stop and clean up video
         if let timeObserver = timeObserver {
             videoPlayer?.removeTimeObserver(timeObserver)
             self.timeObserver = nil
         }
         videoPlayer?.pause()
         videoPlayer = nil
+        
+        // Stop and clean up audio
         audioPlayer?.pause()
         audioPlayer = nil
         
-        // Clear preloaded players
-        preloadedVideoPlayer?.pause()
-        preloadedVideoPlayer = nil
-        preloadedAudioPlayer?.pause()
-        preloadedAudioPlayer = nil
+        // Remove all notifications
+        NotificationCenter.default.removeObserver(self)
     }
     
     deinit {
-        // Since we can't use async/await in deinit, we'll use Task
         Task { @MainActor in
             await stopPlayback()
         }
     }
 }
+
+private let timeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm"
+    return formatter
+}()
 
 /// An observer for the AVPlayer that updates a status message.
 final class PlayerStatusObserver: ObservableObject {
