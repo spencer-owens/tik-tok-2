@@ -1,0 +1,6 @@
+appwrite>=7.1.0
+python-dotenv>=1.0.0
+replicate>=0.22.0
+requests>=2.31.0
+ffmpeg-python>=0.2.0
+mux-python>=3.15.0  # For Mux video streaming 
