@@ -86,13 +86,32 @@ async def process_music_generation(context, job_id, input_params, start_time):
         context.log("🎵 Starting music generation")
         output = await generate_music(context, input_params)
         
+        # Log output details for debugging
+        context.log(f"Raw output type: {type(output)}")
+        context.log(f"Raw output value: {output}")
+        if isinstance(output, list):
+            context.log(f"Output is a list of length: {len(output)}")
+            context.log(f"First element type: {type(output[0])}")
+            context.log(f"First element value: {output[0]}")
+        
         # Calculate execution time
         execution_time = time.time() - start_time
+        
+        # Determine output URL with more robust handling
+        if isinstance(output, list) and len(output) > 0:
+            output_url = str(output[0])
+        elif isinstance(output, (str, bytes)):
+            output_url = str(output)
+        else:
+            output_url = str(output)
+            context.log(f"⚠️ Unexpected output type: {type(output)}")
+        
+        context.log(f"Final output URL: {output_url}")
         
         # Update job with success
         update_job_document(job_id, {
             'status': 'completed',
-            'output_url': str(output[0]) if isinstance(output, list) and len(output) > 0 else str(output),
+            'output_url': output_url,
             'execution_time_seconds': round(execution_time, 2)
         })
         
