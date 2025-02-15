@@ -6,6 +6,7 @@ import tempfile
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import replicate
 import mux_python
@@ -23,6 +24,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
 def log(message: str) -> None:
     """Simple logging with timestamp."""
     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -37,13 +47,19 @@ class GenerationResponse(BaseModel):
     execution_time_seconds: float
     error: Optional[str] = None
 
+class GenerationRequest(BaseModel):
+    """Request model for the combined generation endpoint."""
+    vibe: str
+    heart_rate: int
+    intensity: float
+
 async def generate_music() -> str:
     """Generate peaceful meditation music using Meta's MusicGen model."""
     log("🎵 Starting music generation")
     
     input_params = {
         "model_version": "large",
-        "prompt": "peaceful ambient meditation music, calming lofi beats, gentle and soothing, no lyrics, soft piano and strings",
+        "prompt": "calming lofi beats, peaceful ambient meditation music, no lyrics, soft piano and strings",
         "duration": 10,
         "temperature": 0.7,
         "top_k": 250,
@@ -219,19 +235,74 @@ def upload_to_mux(video_path: str) -> dict:
     }
 
 @app.post("/api/v1/generate-peaceful-content", response_model=GenerationResponse)
-async def generate_peaceful_content():
-    """Generate peaceful music and visuals, merge them, and upload to Mux."""
+async def generate_peaceful_content(request: GenerationRequest):
+    """Generate peaceful music and visuals based on user's vibe and heart rate."""
     start_time = time.time()
     log("🚀 Starting peaceful content generation process")
+    log(f"Vibe: {request.vibe}")
+    log(f"Heart Rate: {request.heart_rate} BPM")
+    log(f"Intensity: {request.intensity}")
     
     try:
         # Create output directory if it doesn't exist
         os.makedirs("output", exist_ok=True)
         
+        # Adjust generation parameters based on heart rate intensity
+        music_prompt = f"peaceful {request.vibe} music, "
+        if request.intensity < 0.3:
+            music_prompt += "very slow and calming, gentle ambient sounds, minimal rhythm"
+            fps = 24
+            num_frames = 72  # 3 seconds at 24fps
+        elif request.intensity > 0.7:
+            music_prompt += "upbeat and energetic while maintaining peace, clear rhythm"
+            fps = 30
+            num_frames = 120  # 4 seconds at 30fps
+        else:
+            music_prompt += "balanced and flowing, moderate tempo"
+            fps = 27
+            num_frames = 90  # ~3.3 seconds at 27fps
+        
+        # Prepare input parameters for music generation
+        music_params = {
+            "model_version": "large",
+            "prompt": music_prompt,
+            "duration": 10,
+            "temperature": 0.7 + (request.intensity * 0.3),  # Higher temperature for more variation at higher intensities
+            "top_k": 250,
+            "top_p": 0.99,
+            "classifier_free_guidance": 3,
+            "output_format": "mp3"
+        }
+        
+        # Prepare input parameters for visualization
+        viz_prompt = f"beautiful abstract peaceful {request.vibe} animation, "
+        if request.intensity < 0.3:
+            viz_prompt += "slow flowing colors, very gentle transitions, calm meditative visuals"
+        elif request.intensity > 0.7:
+            viz_prompt += "dynamic flowing colors, energetic transitions while maintaining peace"
+        else:
+            viz_prompt += "balanced flowing colors, smooth transitions, peaceful energy"
+            
+        viz_params = {
+            "prompt": viz_prompt,
+            "negative_prompt": "text, watermark, ugly, distorted, noisy, sharp, jarring",
+            "fps": fps,
+            "num_frames": num_frames,
+            "guidance_scale": 7.5,
+            "num_inference_steps": 50,
+            "width": 512,
+            "height": 512,
+            "scheduler": "DPM++ Karras SDE"
+        }
+        
+        log("Generation parameters:")
+        log(f"Music: {json.dumps(music_params, indent=2)}")
+        log(f"Visualization: {json.dumps(viz_params, indent=2)}")
+        
         # Generate music and visualization in parallel
         music_url, viz_url = await asyncio.gather(
-            generate_music(),
-            generate_visualization()
+            generate_music_with_params(music_params),
+            generate_visualization_with_params(viz_params)
         )
         
         # Create temporary directory for processing
@@ -274,6 +345,36 @@ async def generate_peaceful_content():
             execution_time_seconds=round(time.time() - start_time, 2)
         )
 
+async def generate_music_with_params(params: dict) -> str:
+    """Generate music using the provided parameters."""
+    log("🎵 Starting music generation with custom parameters")
+    
+    output = replicate.run(
+        "meta/musicgen:7a76a8258b23fae65c5a22debb8841d1d7e816b75c2f24218cd2bd8573787906",
+        input=params
+    )
+    
+    if isinstance(output, list) and len(output) > 0:
+        output_url = str(output[0])
+    else:
+        output_url = str(output)
+    
+    log(f"✅ Music generated: {output_url}")
+    return output_url
+
+async def generate_visualization_with_params(params: dict) -> str:
+    """Generate visualization using the provided parameters."""
+    log("🎬 Starting visualization generation with custom parameters")
+    
+    output = replicate.run(
+        "luma/ray",
+        input=params
+    )
+    
+    output_url = str(output)
+    log(f"✅ Visualization generated: {output_url}")
+    return output_url
+
 @app.get("/")
 async def read_root():
     """Health check endpoint."""
@@ -287,4 +388,5 @@ async def read_root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

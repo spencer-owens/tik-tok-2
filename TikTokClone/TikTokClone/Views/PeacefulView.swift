@@ -11,14 +11,42 @@ struct FloatingEmoji: Identifiable {
 class VideoPlayerViewModel: NSObject, ObservableObject {
     @Published var isVideoReady = false
     @Published var player: AVPlayer?
-    private let playbackId = "Tsb5gt8sNKFbIfGLcSaugeKnJab801G1Ny7RxHR6BakE"
+    @Published var isGeneratingNewVideo = false
+    @Published var currentPlaybackId = ""
+    
+    private let fallbackPlaybackIds = [
+        "o4qB9oZ01zEe4013lWEwupTVLedZs7xHVdKCheSSuf8Vc",
+        "Tsb5gt8sNKFbIfGLcSaugeKnJab801G1Ny7RxHR6BakE"
+    ]
+    private var fallbackTimer: Timer?
+    private var currentFallbackIndex = 0
     
     override init() {
         super.init()
     }
     
-    func setupVideo() {
-        print("🎬 Setting up video player")
+    func startFallbackVideoRotation() {
+        currentPlaybackId = fallbackPlaybackIds[currentFallbackIndex]
+        setupVideo(playbackId: currentPlaybackId)
+        
+        // Rotate between fallback videos every 30 seconds
+        fallbackTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            self.currentFallbackIndex = (self.currentFallbackIndex + 1) % self.fallbackPlaybackIds.count
+            self.currentPlaybackId = self.fallbackPlaybackIds[self.currentFallbackIndex]
+            self.setupVideo(playbackId: self.currentPlaybackId)
+        }
+    }
+    
+    func stopFallbackVideoRotation() {
+        fallbackTimer?.invalidate()
+        fallbackTimer = nil
+    }
+    
+    func setupVideo(playbackId: String) {
+        print("🎬 Setting up video player with playback ID: \(playbackId)")
+        cleanup() // Clean up existing player
+        
         // Configure audio session for background playback
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
@@ -82,6 +110,7 @@ class VideoPlayerViewModel: NSObject, ObservableObject {
     
     deinit {
         cleanup()
+        stopFallbackVideoRotation()
     }
 }
 
@@ -90,6 +119,8 @@ struct PeacefulView: View {
     @StateObject private var viewModel = VideoPlayerViewModel()
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @State private var floatingEmojis: [FloatingEmoji] = []
+    @State private var vibeInput = ""
+    @State private var isShowingInput = true
     
     private let availableEmojis = ["❤️", "😊", "✨", "🙏", "🌟", "🕊️"]
     
@@ -105,6 +136,38 @@ struct PeacefulView: View {
                         .edgesIgnoringSafeArea(.all)
                         .opacity(viewModel.isVideoReady ? 1 : 0)
                         .animation(.easeIn(duration: 0.3), value: viewModel.isVideoReady)
+                }
+                
+                // Vibe Input Overlay
+                if isShowingInput {
+                    VStack(spacing: 20) {
+                        Text("What kind of vibe are you looking for?")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                        
+                        TextField("Describe your desired vibe...", text: $vibeInput)
+                            .textFieldStyle(RoundedBorderTextStyle())
+                            .padding(.horizontal, 40)
+                        
+                        Button(action: generateContent) {
+                            Text("Generate")
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.blue)
+                                .cornerRadius(10)
+                        }
+                        .disabled(vibeInput.isEmpty || viewModel.isGeneratingNewVideo)
+                        
+                        if viewModel.isGeneratingNewVideo {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.5)
+                        }
+                    }
+                    .padding()
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(20)
                 }
                 
                 // Heart Rate Display in top-right corner
@@ -149,7 +212,7 @@ struct PeacefulView: View {
         }
         .onAppear {
             print("🎭 PeacefulView appeared")
-            viewModel.setupVideo()
+            viewModel.startFallbackVideoRotation()
             Task {
                 await appwriteManager.startListeningToReactions()
             }
@@ -157,6 +220,7 @@ struct PeacefulView: View {
         .onDisappear {
             print("👋 PeacefulView disappeared")
             viewModel.cleanup()
+            viewModel.stopFallbackVideoRotation()
             Task {
                 await appwriteManager.stopListeningToReactions()
             }
@@ -166,6 +230,68 @@ struct PeacefulView: View {
                 addFloatingEmoji(latestReaction.emoji, width: UIScreen.main.bounds.width)
             }
         }
+    }
+    
+    private func generateContent() {
+        guard !vibeInput.isEmpty else { return }
+        
+        viewModel.isGeneratingNewVideo = true
+        
+        // Start showing fallback videos while generating
+        viewModel.startFallbackVideoRotation()
+        
+        // Prepare request parameters
+        let heartRate = healthKitManager.currentBPM
+        let intensity = calculateIntensity(heartRate: heartRate)
+        
+        Task {
+            do {
+                // Make API call to generate content
+                let url = URL(string: "http://localhost:8000/api/v1/generate-peaceful-content")!
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                
+                let parameters: [String: Any] = [
+                    "vibe": vibeInput,
+                    "heart_rate": heartRate,
+                    "intensity": intensity
+                ]
+                
+                request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
+                
+                let (data, _) = try await URLSession.shared.data(for: request)
+                let response = try JSONDecoder().decode(GenerationResponse.self, from: data)
+                
+                if response.success, let playbackId = response.mux_playback_id {
+                    // Stop fallback rotation and show new video
+                    viewModel.stopFallbackVideoRotation()
+                    viewModel.setupVideo(playbackId: playbackId)
+                    isShowingInput = false
+                }
+                
+                viewModel.isGeneratingNewVideo = false
+            } catch {
+                print("❌ Error generating content:", error)
+                viewModel.isGeneratingNewVideo = false
+            }
+        }
+    }
+    
+    private func calculateIntensity(heartRate: Int) -> Double {
+        // Map heart rate to intensity (0.0 to 1.0)
+        // Assuming normal range is 60-100 BPM
+        let minRate: Double = 60
+        let maxRate: Double = 100
+        let rate = Double(heartRate)
+        
+        if rate <= minRate {
+            return 0.0 // Most calm
+        } else if rate >= maxRate {
+            return 1.0 // Most intense
+        }
+        
+        return (rate - minRate) / (maxRate - minRate)
     }
     
     private func sendReaction(_ emoji: String) {
@@ -192,4 +318,13 @@ struct PeacefulView: View {
             floatingEmojis.removeAll { $0.id == newEmoji.id }
         }
     }
+}
+
+struct GenerationResponse: Codable {
+    let success: Bool
+    let mux_playback_id: String?
+    let mux_playback_url: String?
+    let status: String
+    let execution_time_seconds: Double
+    let error: String?
 } 
