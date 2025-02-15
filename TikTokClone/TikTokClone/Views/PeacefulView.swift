@@ -1,5 +1,5 @@
 import SwiftUI
-import YouTubeiOSPlayerHelper
+import AVKit
 
 struct FloatingEmoji: Identifiable {
     let id = UUID()
@@ -8,15 +8,90 @@ struct FloatingEmoji: Identifiable {
     var offset: CGFloat
 }
 
+class VideoPlayerViewModel: NSObject, ObservableObject {
+    @Published var isVideoReady = false
+    @Published var player: AVPlayer?
+    private let playbackId = "Tsb5gt8sNKFbIfGLcSaugeKnJab801G1Ny7RxHR6BakE"
+    
+    override init() {
+        super.init()
+    }
+    
+    func setupVideo() {
+        print("🎬 Setting up video player")
+        // Configure audio session for background playback
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("❌ Failed to set audio session category: \(error)")
+        }
+        
+        // Create URL for Mux stream
+        let urlString = "https://stream.mux.com/\(playbackId).m3u8"
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid URL")
+            return
+        }
+        
+        // Create player and item
+        let playerItem = AVPlayerItem(url: url)
+        let player = AVPlayer(playerItem: playerItem)
+        
+        // Configure looping
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: playerItem,
+            queue: .main
+        ) { [weak self] _ in
+            player.seek(to: .zero)
+            player.play()
+        }
+        
+        // Observe when the item is ready to play
+        playerItem.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
+        
+        self.player = player
+        player.play()
+    }
+    
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+        if keyPath == "status",
+           let playerItem = object as? AVPlayerItem {
+            DispatchQueue.main.async {
+                switch playerItem.status {
+                case .readyToPlay:
+                    print("✅ Video ready to play")
+                    self.isVideoReady = true
+                case .failed:
+                    print("❌ Video failed to load: \(String(describing: playerItem.error))")
+                case .unknown:
+                    print("⚠️ Video status unknown")
+                @unknown default:
+                    break
+                }
+            }
+        }
+    }
+    
+    func cleanup() {
+        player?.pause()
+        player = nil
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    deinit {
+        cleanup()
+    }
+}
+
 struct PeacefulView: View {
     @StateObject private var appwriteManager = AppwriteManager.shared
+    @StateObject private var viewModel = VideoPlayerViewModel()
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @State private var floatingEmojis: [FloatingEmoji] = []
-    @State private var isVideoReady = false
-    @State private var playerView: YTPlayerView?
     
     private let availableEmojis = ["❤️", "😊", "✨", "🙏", "🌟", "🕊️"]
-    private let youtubeVideoId = "wKg71lcs5Nw"
     
     var body: some View {
         GeometryReader { geometry in
@@ -24,10 +99,13 @@ struct PeacefulView: View {
                 // Background color while video loads
                 Color.black.edgesIgnoringSafeArea(.all)
                 
-                // YouTube Player with clean interface
-                YouTubePlayerView(videoID: youtubeVideoId, isReady: $isVideoReady)
-                    .opacity(isVideoReady ? 1 : 0)
-                    .animation(.easeIn(duration: 0.3), value: isVideoReady)
+                // Video Player
+                if let player = viewModel.player {
+                    VideoPlayer(player: player)
+                        .edgesIgnoringSafeArea(.all)
+                        .opacity(viewModel.isVideoReady ? 1 : 0)
+                        .animation(.easeIn(duration: 0.3), value: viewModel.isVideoReady)
+                }
                 
                 // Heart Rate Display in top-right corner
                 VStack {
@@ -71,12 +149,14 @@ struct PeacefulView: View {
         }
         .onAppear {
             print("🎭 PeacefulView appeared")
+            viewModel.setupVideo()
             Task {
                 await appwriteManager.startListeningToReactions()
             }
         }
         .onDisappear {
             print("👋 PeacefulView disappeared")
+            viewModel.cleanup()
             Task {
                 await appwriteManager.stopListeningToReactions()
             }
@@ -110,111 +190,6 @@ struct PeacefulView: View {
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             floatingEmojis.removeAll { $0.id == newEmoji.id }
-        }
-    }
-}
-
-struct YouTubePlayerView: UIViewRepresentable {
-    let videoID: String
-    @Binding var isReady: Bool
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    func makeUIView(context: Context) -> YTPlayerView {
-        print("📺 Creating YouTube player")
-        let playerView = YTPlayerView()
-        playerView.delegate = context.coordinator
-        
-        // Load with autoplay and minimal interface
-        playerView.load(withVideoId: videoID, playerVars: [
-            "playsinline": 1,
-            "controls": 0,
-            "showinfo": 0,
-            "modestbranding": 0,
-            "rel": 0,
-            "autoplay": 1,
-            "iv_load_policy": 3,
-            "fs": 0,
-            "autohide": 1,
-            "origin": "https://www.yourapp.com",
-            "enablejsapi": 1,
-            "disablekb": 1,
-            "cc_load_policy": 0,
-            "loop": 1,
-            "color": "white",
-            "branding": 0,
-            "title": 0,
-            "byline": 0,
-            "portrait": 0
-        ])
-        
-        // Additional styling to hide UI elements
-        playerView.webView?.isOpaque = false
-        playerView.webView?.backgroundColor = .clear
-        playerView.backgroundColor = .clear
-        
-        return playerView
-    }
-    
-    func updateUIView(_ uiView: YTPlayerView, context: Context) {
-        // Handle any view updates if needed
-    }
-    
-    class Coordinator: NSObject, YTPlayerViewDelegate {
-        var parent: YouTubePlayerView
-        private var hasAttemptedPlay = false
-        
-        init(_ parent: YouTubePlayerView) {
-            self.parent = parent
-            super.init()
-        }
-        
-        func playerViewDidBecomeReady(_ playerView: YTPlayerView) {
-            print("🎬 YouTube player ready")
-            DispatchQueue.main.async {
-                self.parent.isReady = true
-                // Start playing with a slight delay to ensure player is fully ready
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    print("▶️ Starting playback")
-                    playerView.playVideo()
-                }
-            }
-        }
-        
-        func playerView(_ playerView: YTPlayerView, didChangeTo state: YTPlayerState) {
-            switch state {
-            case .ended:
-                print("🔄 Video ended, replaying")
-                playerView.seek(toSeconds: 0, allowSeekAhead: true)
-                playerView.playVideo()
-            case .paused:
-                print("⏸️ Video paused")
-                // If video was paused and we haven't tried to play yet, attempt to play
-                if !hasAttemptedPlay {
-                    hasAttemptedPlay = true
-                    print("🔄 Attempting to resume playback")
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        playerView.playVideo()
-                    }
-                }
-            case .playing:
-                print("▶️ Video playing")
-                hasAttemptedPlay = false
-            case .buffering:
-                print("⏳ Video buffering")
-            case .unstarted:
-                print("⭕️ Video unstarted")
-            case .cued:
-                print("📋 Video cued")
-            @unknown default:
-                print("❓ Unknown player state")
-            }
-        }
-        
-        func playerView(_ playerView: YTPlayerView, receivedError error: YTPlayerError) {
-            print("❌ YouTube player error: \(error.rawValue)")
         }
     }
 } 
