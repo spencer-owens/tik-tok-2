@@ -13,16 +13,50 @@ class VideoPlayerViewModel: NSObject, ObservableObject {
     @Published var player: AVPlayer?
     @Published var isGeneratingNewVideo = false
     @Published var currentPlaybackId = ""
+    @Published var hasGeneratedVideo = false
+    @Published var isLoadingVideos = true
     
-    private let fallbackPlaybackIds = [
+    // Default fallbacks in case API fails
+    private var fallbackPlaybackIds = [
         "o4qB9oZ01zEe4013lWEwupTVLedZs7xHVdKCheSSuf8Vc",
-        "Tsb5gt8sNKFbIfGLcSaugeKnJab801G1Ny7RxHR6BakE"
+        "Tsb5gt8sNKFbIfGLcSaugeKnJab801G1Ny7RxHR6BakE",
+        "B7riSQ02IoYcwfZ1UAAfiY6PPTl01wwng5hfty5dD9nB4"
     ]
     private var fallbackTimer: Timer?
     private var currentFallbackIndex = 0
     
     override init() {
         super.init()
+        Task {
+            await loadAllVideos()
+        }
+    }
+    
+    private func loadAllVideos() async {
+        print("🎬 Loading all peaceful videos")
+        do {
+            let url = URL(string: "https://tik-tok-2-production.up.railway.app/api/v1/peaceful-videos")!
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let videos = try JSONDecoder().decode([String].self, from: data)
+            
+            if !videos.isEmpty {
+                DispatchQueue.main.async {
+                    print("✅ Loaded \(videos.count) peaceful videos")
+                    self.fallbackPlaybackIds = videos
+                    self.isLoadingVideos = false
+                    // If we're already rotating videos, restart with new list
+                    if self.fallbackTimer != nil {
+                        self.stopFallbackVideoRotation()
+                        self.startFallbackVideoRotation()
+                    }
+                }
+            }
+        } catch {
+            print("❌ Failed to load videos, using defaults: \(error)")
+            DispatchQueue.main.async {
+                self.isLoadingVideos = false
+            }
+        }
     }
     
     func startFallbackVideoRotation() {
@@ -112,6 +146,13 @@ class VideoPlayerViewModel: NSObject, ObservableObject {
         cleanup()
         stopFallbackVideoRotation()
     }
+    
+    func addVideoToRotation(_ playbackId: String) {
+        if !fallbackPlaybackIds.contains(playbackId) {
+            fallbackPlaybackIds.append(playbackId)
+        }
+        hasGeneratedVideo = true
+    }
 }
 
 struct PeacefulView: View {
@@ -174,7 +215,7 @@ struct PeacefulView: View {
                 }
                 
                 // Vibe Input Overlay
-                if isShowingInput {
+                if isShowingInput && !viewModel.hasGeneratedVideo {
                     VStack(spacing: 20) {
                         Text("What kind of vibe are you looking for?")
                             .font(.title2)
@@ -324,6 +365,9 @@ struct PeacefulView: View {
                 
                 if apiResponse.success, let playbackId = apiResponse.mux_playback_id {
                     print("🎬 Got new playback ID:", playbackId)
+                    
+                    // Add new video to rotation and mark as generated
+                    viewModel.addVideoToRotation(playbackId)
                     
                     // Stop fallback rotation and show new video
                     viewModel.stopFallbackVideoRotation()

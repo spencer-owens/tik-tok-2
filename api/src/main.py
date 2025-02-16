@@ -386,6 +386,85 @@ async def read_root():
         ]
     }
 
+@app.get("/api/v1/peaceful-videos", response_model=list[str])
+async def get_peaceful_videos():
+    """Get all peaceful content video playback IDs."""
+    try:
+        # Configure Mux API client
+        configuration = mux_python.Configuration()
+        configuration.username = os.getenv("MUX_TOKEN_ID")
+        configuration.password = os.getenv("MUX_TOKEN_SECRET")
+        
+        # Create assets API client
+        assets_api = mux_python.AssetsApi(mux_python.ApiClient(configuration))
+        
+        # Get all assets with our metadata
+        assets = assets_api.list_assets()
+        
+        # Filter for peaceful content videos and get their playback IDs
+        peaceful_videos = []
+        for asset in assets.data:
+            if (asset.status == "ready" and 
+                asset.metadata and 
+                asset.metadata.get("video_type") == "peaceful_content" and
+                asset.metadata.get("app") == "tiktok2" and
+                asset.playback_ids):
+                peaceful_videos.append(asset.playback_ids[0].id)
+        
+        log(f"Found {len(peaceful_videos)} peaceful content videos")
+        return peaceful_videos
+        
+    except Exception as e:
+        log(f"❌ Error fetching peaceful videos: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch videos: {str(e)}"
+        )
+
+async def update_asset_metadata(asset_id: str) -> bool:
+    """Update an existing Mux asset with our metadata tags."""
+    try:
+        # Configure Mux API client
+        configuration = mux_python.Configuration()
+        configuration.username = os.getenv("MUX_TOKEN_ID")
+        configuration.password = os.getenv("MUX_TOKEN_SECRET")
+        
+        # Create assets API client
+        assets_api = mux_python.AssetsApi(mux_python.ApiClient(configuration))
+        
+        # Update the asset with our metadata
+        update_asset_request = {
+            "metadata": {
+                "video_type": "peaceful_content",
+                "app": "tiktok2"
+            }
+        }
+        
+        assets_api.update_asset(asset_id, update_asset_request)
+        log(f"✅ Updated metadata for asset {asset_id}")
+        return True
+        
+    except Exception as e:
+        log(f"❌ Failed to update metadata for asset {asset_id}: {str(e)}")
+        return False
+
+@app.post("/api/v1/update-existing-assets")
+async def update_existing_assets():
+    """Update metadata for our existing peaceful content videos."""
+    existing_assets = [
+        "e002OtxTOUHu4IjIyMTfrv3vEe1NvQeojSIhsye3K7NU",
+        "BLE66MwQDS86Np9RFlc5VZbBEZQxF4bQv59o1jLCTeA",
+        "VjyWfk5LGAljVnLyXUUf2BkjzMM600GLKBrrsKpv94KI",
+        "5o02oqUsPs4W4D9BD5lCauLAywy8K5jMYmqThvzDSdL00"
+    ]
+    
+    results = []
+    for asset_id in existing_assets:
+        success = await update_asset_metadata(asset_id)
+        results.append({"asset_id": asset_id, "success": success})
+    
+    return {"results": results}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", "8000"))

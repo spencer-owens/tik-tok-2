@@ -40,18 +40,22 @@ def upload_to_mux(video_path: str) -> dict:
         uploads_api = mux_python.DirectUploadsApi(mux_python.ApiClient(configuration))
         log("Mux Direct Uploads API client created")
         
-        # Create a direct upload URL
+        # Create a direct upload URL with metadata
         create_upload_request = mux_python.CreateUploadRequest(
             new_asset_settings=mux_python.CreateAssetRequest(
                 playback_policy=[mux_python.PlaybackPolicy.PUBLIC],
                 test=False,
-                encoding_tier="baseline"
+                encoding_tier="baseline",
+                metadata={
+                    "video_type": "peaceful_content",
+                    "app": "tiktok2"
+                }
             ),
             cors_origin="*",
             timeout=3600
         )
         
-        log("Creating direct upload")
+        log("Creating direct upload with metadata")
         upload = uploads_api.create_direct_upload(create_upload_request)
         log(f"✅ Upload created with ID: {upload.data.id}")
         
