@@ -121,6 +121,9 @@ struct PeacefulView: View {
     @State private var floatingEmojis: [FloatingEmoji] = []
     @State private var vibeInput = ""
     @State private var isShowingInput = true
+    @State private var generationStatus = ""
+    @State private var showGenerationReceipt = false
+    @FocusState private var isInputFocused: Bool
     
     private let availableEmojis = ["❤️", "😊", "✨", "🙏", "🌟", "🕊️"]
     
@@ -138,6 +141,38 @@ struct PeacefulView: View {
                         .animation(.easeIn(duration: 0.3), value: viewModel.isVideoReady)
                 }
                 
+                // Loading Spinner (top left)
+                if viewModel.isGeneratingNewVideo {
+                    VStack {
+                        HStack {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                                .padding()
+                                .background(Color.black.opacity(0.5))
+                                .cornerRadius(10)
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+                    .padding(.top, 50)
+                    .padding(.leading)
+                }
+                
+                // Generation Receipt Toast
+                if showGenerationReceipt {
+                    VStack {
+                        Text("Generating your peaceful content...")
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.black.opacity(0.8))
+                            .cornerRadius(10)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        Spacer()
+                    }
+                    .padding(.top, 100)
+                }
+                
                 // Vibe Input Overlay
                 if isShowingInput {
                     VStack(spacing: 20) {
@@ -147,8 +182,10 @@ struct PeacefulView: View {
                             .multilineTextAlignment(.center)
                         
                         TextField("Describe your desired vibe...", text: $vibeInput)
-                            .textFieldStyle(RoundedBorderTextStyle())
+                            .textFieldStyle(.roundedBorder)
                             .padding(.horizontal, 40)
+                            .focused($isInputFocused)
+                            .disabled(viewModel.isGeneratingNewVideo)
                         
                         Button(action: generateContent) {
                             Text("Generate")
@@ -158,12 +195,6 @@ struct PeacefulView: View {
                                 .cornerRadius(10)
                         }
                         .disabled(vibeInput.isEmpty || viewModel.isGeneratingNewVideo)
-                        
-                        if viewModel.isGeneratingNewVideo {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(1.5)
-                        }
                     }
                     .padding()
                     .background(Color.black.opacity(0.8))
@@ -235,7 +266,22 @@ struct PeacefulView: View {
     private func generateContent() {
         guard !vibeInput.isEmpty else { return }
         
+        // Dismiss keyboard and update UI state
+        isInputFocused = false
         viewModel.isGeneratingNewVideo = true
+        
+        // Hide input and show receipt
+        withAnimation(.easeOut(duration: 0.3)) {
+            isShowingInput = false
+            showGenerationReceipt = true
+        }
+        
+        // Hide receipt after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            withAnimation {
+                showGenerationReceipt = false
+            }
+        }
         
         // Start showing fallback videos while generating
         viewModel.startFallbackVideoRotation()
@@ -247,10 +293,11 @@ struct PeacefulView: View {
         Task {
             do {
                 // Make API call to generate content
-                let url = URL(string: "http://localhost:8000/api/v1/generate-peaceful-content")!
+                let url = URL(string: "https://tik-tok-2-production.up.railway.app/api/v1/generate-peaceful-content")!
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.timeoutInterval = 300 // 5 minutes timeout
                 
                 let parameters: [String: Any] = [
                     "vibe": vibeInput,
@@ -260,19 +307,47 @@ struct PeacefulView: View {
                 
                 request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
                 
-                let (data, _) = try await URLSession.shared.data(for: request)
-                let response = try JSONDecoder().decode(GenerationResponse.self, from: data)
+                // Add better error handling and logging
+                print("🚀 Sending request to API with parameters:", parameters)
+                generationStatus = "Generating peaceful content based on your vibe..."
                 
-                if response.success, let playbackId = response.mux_playback_id {
+                let (data, httpResponse) = try await URLSession.shared.data(for: request)
+                
+                if let httpResponse = httpResponse as? HTTPURLResponse {
+                    print("📡 API Response Status:", httpResponse.statusCode)
+                }
+                
+                print("📦 API Response Data:", String(data: data, encoding: .utf8) ?? "No data")
+                
+                let apiResponse = try JSONDecoder().decode(GenerationResponse.self, from: data)
+                print("✅ Decoded response:", apiResponse)
+                
+                if apiResponse.success, let playbackId = apiResponse.mux_playback_id {
+                    print("🎬 Got new playback ID:", playbackId)
+                    
                     // Stop fallback rotation and show new video
                     viewModel.stopFallbackVideoRotation()
                     viewModel.setupVideo(playbackId: playbackId)
-                    isShowingInput = false
+                    viewModel.isGeneratingNewVideo = false
+                } else if let error = apiResponse.error {
+                    print("❌ API Error:", error)
+                    // Show error and reset UI
+                    withAnimation {
+                        isShowingInput = true
+                        showGenerationReceipt = false
+                    }
+                    generationStatus = "Error: \(error)"
                 }
                 
                 viewModel.isGeneratingNewVideo = false
             } catch {
-                print("❌ Error generating content:", error)
+                print("❌ Network Error:", error)
+                // Show error and reset UI
+                withAnimation {
+                    isShowingInput = true
+                    showGenerationReceipt = false
+                }
+                generationStatus = "Error: Connection failed. Please try again."
                 viewModel.isGeneratingNewVideo = false
             }
         }
