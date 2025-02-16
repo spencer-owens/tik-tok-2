@@ -175,11 +175,16 @@ def upload_to_mux(video_path: str) -> dict:
     
     # Create upload
     uploads_api = mux_python.DirectUploadsApi(mux_python.ApiClient(configuration))
+    create_asset_request = mux_python.CreateAssetRequest(
+        playback_policy=[mux_python.PlaybackPolicy.PUBLIC],
+        test=False,
+        metadata={
+            "video_type": "peaceful_content",
+            "app": "tiktok2"
+        }
+    )
     create_upload_request = mux_python.CreateUploadRequest(
-        new_asset_settings=mux_python.CreateAssetRequest(
-            playback_policy=[mux_python.PlaybackPolicy.PUBLIC],
-            test=False
-        ),
+        new_asset_settings=create_asset_request,
         cors_origin="*"
     )
     
@@ -432,16 +437,17 @@ async def update_asset_metadata(asset_id: str) -> bool:
         # Create assets API client
         assets_api = mux_python.AssetsApi(mux_python.ApiClient(configuration))
         
-        # Update the asset with our metadata
-        update_asset_request = {
-            "metadata": {
-                "video_type": "peaceful_content",
-                "app": "tiktok2"
-            }
+        # Create proper update asset request using SDK model
+        metadata = {
+            "video_type": "peaceful_content",
+            "app": "tiktok2"
         }
+        update_asset_request = mux_python.UpdateAssetRequest(metadata=metadata)
         
-        assets_api.update_asset(asset_id, update_asset_request)
+        # Update the asset
+        updated_asset = assets_api.update_asset(asset_id, update_asset_request)
         log(f"✅ Updated metadata for asset {asset_id}")
+        log(f"Updated asset metadata: {updated_asset.data.metadata}")
         return True
         
     except Exception as e:
